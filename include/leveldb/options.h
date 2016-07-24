@@ -38,6 +38,8 @@ struct Options {
   // REQUIRES: The client must ensure that the comparator supplied
   // here has the same name and orders keys *exactly* the same as the
   // comparator provided to previous open calls on the same DB.
+  // key排序的规则，默认安字节的字典序
+  // 自定义排序规则的时候，需要保证和open的时候传入的规则一致
   const Comparator* comparator;
 
   // If true, the database will be created if it is missing.
@@ -54,6 +56,7 @@ struct Options {
   // corruption of one DB entry may cause a large number of entries to
   // become unreadable or for the entire DB to become unopenable.
   // Default: false
+  // 没明白？？
   bool paranoid_checks;
 
   // Use the specified object to interact with the environment,
@@ -80,6 +83,7 @@ struct Options {
   // the next time the database is opened.
   //
   // Default: 4MB
+  // 这个buffer是啥，memtable?
   size_t write_buffer_size;
 
   // Number of open files that can be used by the DB.  You may need to
@@ -110,6 +114,7 @@ struct Options {
   // leave this parameter alone.
   //
   // Default: 16
+  // 干啥用的？
   int block_restart_interval;
 
   // Compress blocks using the specified compression algorithm.  This

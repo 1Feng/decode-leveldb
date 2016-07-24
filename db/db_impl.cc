@@ -1493,6 +1493,7 @@ Status DB::Open(const Options& options, const std::string& dbname,
   DBImpl* impl = new DBImpl(options, dbname);
   impl->mutex_.Lock();
   VersionEdit edit;
+  // 如果没有则创建，如果存在则报错 两个选项
   // Recover handles create_if_missing, error_if_exists
   bool save_manifest = false;
   Status s = impl->Recover(&edit, &save_manifest);

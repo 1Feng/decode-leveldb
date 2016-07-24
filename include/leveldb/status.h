@@ -54,6 +54,7 @@ class Status {
   // Returns true iff the status indicates a NotFound error.
   bool IsNotFound() const { return code() == kNotFound; }
 
+  // Corruption 这里是什么意思？
   // Returns true iff the status indicates a Corruption error.
   bool IsCorruption() const { return code() == kCorruption; }
 
@@ -81,7 +82,7 @@ class Status {
   enum Code {
     kOk = 0,
     kNotFound = 1,
-    kCorruption = 2,
+    kCorruption = 2,  // 这个代表什么？
     kNotSupported = 3,
     kInvalidArgument = 4,
     kIOError = 5
