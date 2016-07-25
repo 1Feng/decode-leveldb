@@ -910,6 +910,7 @@ Status VersionSet::Recover(bool *save_manifest) {
   if (current.empty() || current[current.size()-1] != '\n') {
     return Status::Corruption("CURRENT file does not end with newline");
   }
+  // @1Feng: why delete the last one ?
   current.resize(current.size() - 1);
 
   std::string dscname = dbname_ + "/" + current;

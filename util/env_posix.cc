@@ -44,6 +44,7 @@ class PosixSequentialFile: public SequentialFile {
 
   virtual Status Read(size_t n, Slice* result, char* scratch) {
     Status s;
+    // @1Feng: why use fread_unlocked
     size_t r = fread_unlocked(scratch, 1, n, file_);
     *result = Slice(scratch, r);
     if (r < n) {
@@ -392,6 +393,8 @@ class PosixEnv : public Env {
 
   virtual Status CreateDir(const std::string& name) {
     Status result;
+    // S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH == 0755
+    // 0700    | 0040    | 0010    | 0004    | 0001
     if (mkdir(name.c_str(), 0755) != 0) {
       result = IOError(name, errno);
     }
@@ -429,13 +432,15 @@ class PosixEnv : public Env {
   virtual Status LockFile(const std::string& fname, FileLock** lock) {
     *lock = NULL;
     Status result;
+    // 0644 means S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH
     int fd = open(fname.c_str(), O_RDWR | O_CREAT, 0644);
+    // 第一次见到这种else if用法, 在条件判断里执行操作，利用条件成功进行错误处理以及中断
     if (fd < 0) {
       result = IOError(fname, errno);
     } else if (!locks_.Insert(fname)) {
       close(fd);
       result = Status::IOError("lock " + fname, "already held by process");
-    } else if (LockOrUnlock(fd, true) == -1) {
+    } else if (LockOrUnlock(fd, true) == -1) {  // 避免其他进程的并发写操作
       result = IOError("lock " + fname, errno);
       close(fd);
       locks_.Remove(fname);

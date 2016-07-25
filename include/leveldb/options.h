@@ -44,10 +44,12 @@ struct Options {
 
   // If true, the database will be created if it is missing.
   // Default: false
+  // 如果没有则创建
   bool create_if_missing;
 
   // If true, an error is raised if the database already exists.
   // Default: false
+  // 如果存在则报错
   bool error_if_exists;
 
   // If true, the implementation will do aggressive checking of the

@@ -77,6 +77,11 @@ class Status {
   //    state_[0..3] == length of message
   //    state_[4]    == code
   //    state_[5..]  == message
+  //  -------------------------------------------
+  //  |    4   |   1  | len1 | 1 |   1   | len2 |
+  //  -----------------------------------------
+  //  | length | code | msg1 | : | space | msg2 |
+  //  -------------------------------------------
   const char* state_;
 
   enum Code {
