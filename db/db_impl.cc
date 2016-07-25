@@ -1198,6 +1198,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
 
   MutexLock l(&mutex_);
   writers_.push_back(&w);
+  // 等待直到，w执行完，或者w出队列
   while (!w.done && &w != writers_.front()) {
     w.cv.Wait();
   }
@@ -1314,6 +1315,8 @@ WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
 
 // REQUIRES: mutex_ is held
 // REQUIRES: this thread is currently at the front of the writer queue
+// 非强制compact的时候才会delay
+// 强制compact的说时候是不会写东西的，delay没有意义
 Status DBImpl::MakeRoomForWrite(bool force) {
   mutex_.AssertHeld();
   assert(!writers_.empty());
@@ -1333,6 +1336,9 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       // individual write by 1ms to reduce latency variance.  Also,
       // this delay hands over some CPU to the compaction thread in
       // case it is sharing the same core as the writer.
+      // 所谓hard limit 应该是指StopWritesTrigger
+      // 为了避免等到了hard limit直接等待数秒钟，所以在此处提前延迟一毫秒
+      // 从而避免和compation thread抢cpu资源
       mutex_.Unlock();
       env_->SleepForMicroseconds(1000);
       allow_delay = false;  // Do not delay a single write more than once
@@ -1344,6 +1350,8 @@ Status DBImpl::MakeRoomForWrite(bool force) {
     } else if (imm_ != NULL) {
       // We have filled up the current memtable, but the previous
       // one is still being compacted, so we wait.
+      // 当前的memtable写满了，但是immutalbe—memtable仍在compact，此时也要等待
+      // imm_ != NULL 就意味着仍在compact么？那imm_既存在，又不compact的时间存在么？
       Log(options_.info_log, "Current memtable full; waiting...\n");
       bg_cv_.Wait();
     } else if (versions_->NumLevelFiles(0) >= config::kL0_StopWritesTrigger) {
@@ -1366,6 +1374,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       logfile_ = lfile;
       logfile_number_ = new_log_number;
       log_ = new log::Writer(lfile);
+      // @1Feng: 直接就这么操作，imm_ 一定等于NULL么？
       imm_ = mem_;
       has_imm_.Release_Store(imm_);
       mem_ = new MemTable(internal_comparator_);
