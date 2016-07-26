@@ -650,7 +650,7 @@ void DBImpl::MaybeScheduleCompaction() {
   } else if (!bg_error_.ok()) {
     // Already got an error; no more changes
   } else if (imm_ == NULL &&
-             manual_compaction_ == NULL &&
+             manual_compaction_ == NULL &&  // @1Feng: manual_compaction 含义是什么？什么时候会被赋值？
              !versions_->NeedsCompaction()) {
     // No work to be done
   } else {
@@ -678,6 +678,7 @@ void DBImpl::BackgroundCall() {
 
   // Previous compaction may have produced too many files in a level,
   // so reschedule another compaction if needed.
+  // @1Feng: 这么无休止的调用下去，是否会一直有个后台线程层层递归的去进行compact？
   MaybeScheduleCompaction();
   bg_cv_.SignalAll();
 }
@@ -1197,8 +1198,10 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
   w.done = false;
 
   MutexLock l(&mutex_);
+  // 将写操作加入队列中，并等待该条操作出队列
+  // 在等待的过程中，其他线程有可能等到了他插入的操作出队列
+  // 然后组织了一次批量操作，把当前线程的操作一并执行了
   writers_.push_back(&w);
-  // 等待直到，w执行完，或者w出队列
   while (!w.done && &w != writers_.front()) {
     w.cv.Wait();
   }
@@ -1211,8 +1214,10 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
   uint64_t last_sequence = versions_->LastSequence();
   Writer* last_writer = &w;
   if (status.ok() && my_batch != NULL) {  // NULL batch is for compactions
+    // 每条写操作都会尝试把队列里其他的写操作组织成批量操作
     WriteBatch* updates = BuildBatchGroup(&last_writer);
     WriteBatchInternal::SetSequence(updates, last_sequence + 1);
+    // sequence number 会因为批量写变得不连续
     last_sequence += WriteBatchInternal::Count(updates);
 
     // Add to log and apply to memtable.  We can release the lock
@@ -1245,6 +1250,8 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
     versions_->SetLastSequence(last_sequence);
   }
 
+  // 批量写入执行完，挨个signal一下
+  // 唤醒条件是done == true
   while (true) {
     Writer* ready = writers_.front();
     writers_.pop_front();
@@ -1266,6 +1273,10 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
 
 // REQUIRES: Writer list must be non-empty
 // REQUIRES: First writer must have a non-NULL batch
+// 功能：从队列头部开始,将所有连续的sync不冲突的写操作组织成一条批量写
+// 解释：
+//   所谓sync不冲突，即头部如果是sync == true，其他都可以是false
+//   但是头部一旦是false，则其他sync为true的都会与之冲突
 WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
   assert(!writers_.empty());
   Writer* first = writers_.front();
@@ -1277,8 +1288,8 @@ WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
   // Allow the group to grow up to a maximum size, but if the
   // original write is small, limit the growth so we do not slow
   // down the small write too much.
-  size_t max_size = 1 << 20;
-  if (size <= (128<<10)) {
+  size_t max_size = 1 << 20;  // 1M
+  if (size <= (128<<10)) {    // 128 kb ?
     max_size = size + (128<<10);
   }
 
@@ -1315,8 +1326,11 @@ WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
 
 // REQUIRES: mutex_ is held
 // REQUIRES: this thread is currently at the front of the writer queue
-// 非强制compact的时候才会delay
-// 强制compact的说时候是不会写东西的，delay没有意义
+// 功能：检查是否有足够空间用来写入，如果没有则将memtable转换为immutable-mmtable
+// 注意事项：
+//   force参数用来强制执行
+//   该函数有可能会等待
+//   force == false的时候才会等待, force == false时候是不会写东西的，等待没有意义
 Status DBImpl::MakeRoomForWrite(bool force) {
   mutex_.AssertHeld();
   assert(!writers_.empty());
@@ -1374,7 +1388,6 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       logfile_ = lfile;
       logfile_number_ = new_log_number;
       log_ = new log::Writer(lfile);
-      // @1Feng: 直接就这么操作，imm_ 一定等于NULL么？
       imm_ = mem_;
       has_imm_.Release_Store(imm_);
       mem_ = new MemTable(internal_comparator_);

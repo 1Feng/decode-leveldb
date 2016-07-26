@@ -25,9 +25,9 @@ namespace leveldb {
 
 // binary format per rep
 // ------------------------------------------------------------------------------------------------------------
-// |     8 byte     |  4 byte |        1 - 5 byte        | any byte |       1 - 5 byte            |  any byte |
+// |     8 byte     |  4 byte | 1 byte |       1 - 5 byte         | any byte |       1 - 5 byte            |  any byte |
 // ------------------------------------------------------------------------------------------------------------
-// | sequence number|  count  | encoded form of key size |  raw key | encoded form of value size  | raw value |
+// | sequence number|  count  |  type  | encoded form of key size |  raw key | encoded form of value size  | raw value |
 // ------------------------------------------------------------------------------------------------------------
 
 // WriteBatch header has an 8-byte sequence number followed by a 4-byte count.
