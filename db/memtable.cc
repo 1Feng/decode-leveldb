@@ -102,6 +102,7 @@ void MemTable::Add(SequenceNumber s, ValueType type,
   p = EncodeVarint32(p, val_size);
   memcpy(p, value.data(), val_size);
   assert((p + val_size) - buf == encoded_len);
+  // @1Feng: key value 是组合在一起存放到skiplist里面的，那查找的时候是如何搞的？
   table_.Insert(buf);
 }
 

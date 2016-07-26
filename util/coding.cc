@@ -44,8 +44,15 @@ void PutFixed64(std::string* dst, uint64_t value) {
   dst->append(buf, sizeof(buf));
 }
 
-// Little-endian like, just store 7 bits per byte
-// @1Feng: why not 8 bit per byte ?
+// Little-endian like,
+// 把 32 bit 整形最多分割为5分， 5 + 7 + 7 + 7 + 7
+// 每7个bit存放在一个byte里，如果存不下，高位置1(和128进行或操作), 多出来的继续存放在下一个byte里，依次类推
+// code in binary:                        11111100 11111100 11111100 11111100
+// intermediate process:         00001111 11100111 11110011 11111001 11111100   每个byte转化之后的结果，从高位到低位
+// encode addr from low--high:   11111100 11111001 11110011 11100111 00001111   从低地址到高地址
+// decode in binary:                      11111100 11111100 11111100 11111100
+// 这样编码就可以使用非固定数量的字节（最多5 byte）来编码32位整型
+// 只需要从低字节开始查找，如果最高位为1，说明后续字节仍有数据存储,否则则停止
 char* EncodeVarint32(char* dst, uint32_t v) {
   // Operate on characters as unsigneds
   unsigned char* ptr = reinterpret_cast<unsigned char*>(dst);
@@ -118,6 +125,7 @@ const char* GetVarint32PtrFallback(const char* p,
   for (uint32_t shift = 0; shift <= 28 && p < limit; shift += 7) {
     uint32_t byte = *(reinterpret_cast<const unsigned char*>(p));
     p++;
+    // 如果高位为1, 即超出7 bit, 说明高位的byte还存有数据
     if (byte & 128) {
       // More bytes are present
       result |= ((byte & 127) << shift);

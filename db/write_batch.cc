@@ -51,7 +51,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
   if (input.size() < kHeader) {
     return Status::Corruption("malformed WriteBatch (too small)");
   }
-
+  // 跳过 sequence number 和 count
   input.remove_prefix(kHeader);
   Slice key, value;
   int found = 0;
@@ -61,6 +61,8 @@ Status WriteBatch::Iterate(Handler* handler) const {
     input.remove_prefix(1);
     switch (tag) {
       case kTypeValue:
+        // 取出key， value的raw data
+        // @1Feng: 既然这里又要取出来，那何必当初呢？除非是对写入log来说是友好的
         if (GetLengthPrefixedSlice(&input, &key) &&
             GetLengthPrefixedSlice(&input, &value)) {
           handler->Put(key, value);

@@ -206,9 +206,9 @@ class LookupKey {
 
  private:
   // We construct a char array of the form:
-  //    klength  varint32               <-- start_
+  //    klength  varint32               <-- start_     这个长度包括key的长度和type的长度（8）
   //    userkey  char[klength]          <-- kstart_
-  //    tag      uint64
+  //    tag      uint64                                tag就是(SequenceNumber << 8) | stype，stype是指value还是deletion
   //                                    <-- end_
   // The array is a suitable MemTable key.
   // The suffix starting with "userkey" can be used as an InternalKey.
