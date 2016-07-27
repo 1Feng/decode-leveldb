@@ -75,10 +75,11 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
       // We do not cache error results so that if the error is transient,
       // or somebody repairs the file, we recover automatically.
     } else {
-      // table_cache里存放的是TableAndFile结构，key是file_number
+      // table_cache里存放的是TableAndFile结构，此处的key是file_number
       TableAndFile* tf = new TableAndFile;
       tf->file = file;
       tf->table = table;
+      // 把key， tf组织进一个LRUHandle中，插入LRU-cache内，然后返回这个LRUHandle
       *handle = cache_->Insert(key, tf, 1, &DeleteEntry);
     }
   }
@@ -118,6 +119,7 @@ Status TableCache::Get(const ReadOptions& options,
   // 第一次文件读取，加载 index
   Status s = FindTable(file_number, file_size, &handle);
   if (s.ok()) {
+    // 避免在cache中再查找了，直接用上文中返回的handle，取table进行查找
     Table* t = reinterpret_cast<TableAndFile*>(cache_->Value(handle))->table;
     // 如果cache里没有，则触发第二次文件读取，读取block内容
     s = t->InternalGet(options, k, arg, saver);
