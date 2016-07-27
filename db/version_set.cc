@@ -348,6 +348,7 @@ Status Version::Get(const ReadOptions& options,
     if (level == 0) {
       // Level-0 files may overlap each other.  Find all files that
       // overlap user_key and process them in order from newest to oldest.
+      // 把level0里有可能包含这个key的file的metadata都放进tmp里
       tmp.reserve(num_files);
       for (uint32_t i = 0; i < num_files; i++) {
         FileMetaData* f = files[i];
@@ -358,6 +359,10 @@ Status Version::Get(const ReadOptions& options,
       }
       if (tmp.empty()) continue;
 
+      // 按照文件新旧排序
+      // 注: 因为level0存在key重叠，并且没有新旧顺序，所以需要排序
+      //     但是level > 0中，key没有重叠，文件新旧就没有意义了
+      //     仅仅依靠文件级别是key有序的就可以进行二分查找了
       std::sort(tmp.begin(), tmp.end(), NewestFirst);
       files = &tmp[0];
       num_files = tmp.size();
@@ -380,6 +385,7 @@ Status Version::Get(const ReadOptions& options,
       }
     }
 
+    // 已经确定在哪个文件中了，接下来就是去文件中读取value
     for (uint32_t i = 0; i < num_files; ++i) {
       if (last_file_read != NULL && stats->seek_file == NULL) {
         // We have had more than one seek for this read.  Charge the 1st file.
@@ -396,6 +402,7 @@ Status Version::Get(const ReadOptions& options,
       saver.ucmp = ucmp;
       saver.user_key = user_key;
       saver.value = value;
+      // cache是table级别的,默认LRU
       s = vset_->table_cache_->Get(options, f->number, f->file_size,
                                    ikey, &saver, SaveValue);
       if (!s.ok()) {

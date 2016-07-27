@@ -5,6 +5,7 @@ build_config.mk
 *.so
 *.so.*
 *_test
+*.swp
 db_bench
 leveldbutil
 tags

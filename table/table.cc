@@ -182,12 +182,16 @@ Iterator* Table::BlockReader(void* arg,
       EncodeFixed64(cache_key_buffer, table->rep_->cache_id);
       EncodeFixed64(cache_key_buffer+8, handle.offset());
       Slice key(cache_key_buffer, sizeof(cache_key_buffer));
+      // 先去block cache里查找
       cache_handle = block_cache->Lookup(key);
       if (cache_handle != NULL) {
         block = reinterpret_cast<Block*>(block_cache->Value(cache_handle));
       } else {
+        // 如果cache miss则读取block，触发第二次磁盘操作
         s = ReadBlock(table->rep_->file, options, handle, &contents);
         if (s.ok()) {
+          // @1Feng:
+          // block_cache里放的是Block结构, key 是？？？
           block = new Block(contents);
           if (contents.cachable && options.fill_cache) {
             cache_handle = block_cache->Insert(
@@ -230,7 +234,9 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k,
   Iterator* iiter = rep_->index_block->NewIterator(rep_->options.comparator);
   iiter->Seek(k);
   if (iiter->Valid()) {
-    Slice handle_value = iiter->value();
+    Slice handle_value = iiter->value(); // 这里这个value是啥？
+    // @1Feng: bloom filter是block级别的？原来不是全局的？
+    // 除非用户指定，而且这里的filter 默认是NULL啊
     FilterBlockReader* filter = rep_->filter;
     BlockHandle handle;
     if (filter != NULL &&

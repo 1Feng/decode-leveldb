@@ -186,6 +186,17 @@ inline bool ParseInternalKey(const Slice& internal_key,
   return (c <= static_cast<unsigned char>(kTypeValue));
 }
 
+// lookup key format:
+// start_       kstart_                                         end_
+//   |             |                                             |
+//   |<---------------------memtable_key------------------------>|
+//                 |<--user_key-->|
+//                 |<---------------internal_key---------------->|
+//   -------------------------------------------------------------
+//   |  1--5 byte  | klenght byte |           8 byte             |
+//   -------------------------------------------------------------
+//   | klenght + 8 |   raw key    | pack(sequence number, type)) |
+//   -------------------------------------------------------------
 // A helper class useful for DBImpl::Get()
 class LookupKey {
  public:
@@ -206,9 +217,9 @@ class LookupKey {
 
  private:
   // We construct a char array of the form:
-  //    klength  varint32               <-- start_     这个长度包括key的长度和type的长度（8）
-  //    userkey  char[klength]          <-- kstart_
-  //    tag      uint64                                tag就是(SequenceNumber << 8) | stype，stype是指value还是deletion
+  //    klength+8  varint32               <-- start_     这个长度包括key的长度和tag的长度（8）
+  //    userkey    char[klength]          <-- kstart_
+  //    tag        uint64                                tag就是(SequenceNumber << 8) | stype，stype是指value还是deletion
   //                                    <-- end_
   // The array is a suitable MemTable key.
   // The suffix starting with "userkey" can be used as an InternalKey.

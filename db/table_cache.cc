@@ -48,7 +48,11 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
   char buf[sizeof(file_number)];
   EncodeFixed64(buf, file_number);
   Slice key(buf, sizeof(buf));
+  // 这里的cache只是table cache，存放的是文件handle，table的指针
+  // table里存放了sstable的index内容，以及指示block_cache的cache_id
+  // 注意和block cache做区分
   *handle = cache_->Lookup(key);
+  // 如果 *handle != NULL,说明命中缓存,直接返回OK
   if (*handle == NULL) {
     std::string fname = TableFileName(dbname_, file_number);
     RandomAccessFile* file = NULL;
@@ -61,6 +65,7 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
       }
     }
     if (s.ok()) {
+      // 一次文件读取？
       s = Table::Open(*options_, file, file_size, &table);
     }
 
@@ -70,6 +75,7 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
       // We do not cache error results so that if the error is transient,
       // or somebody repairs the file, we recover automatically.
     } else {
+      // table_cache里存放的是TableAndFile结构，key是file_number
       TableAndFile* tf = new TableAndFile;
       tf->file = file;
       tf->table = table;
@@ -109,9 +115,11 @@ Status TableCache::Get(const ReadOptions& options,
                        void* arg,
                        void (*saver)(void*, const Slice&, const Slice&)) {
   Cache::Handle* handle = NULL;
+  // 第一次文件读取，加载 index
   Status s = FindTable(file_number, file_size, &handle);
   if (s.ok()) {
     Table* t = reinterpret_cast<TableAndFile*>(cache_->Value(handle))->table;
+    // 如果cache里没有，则触发第二次文件读取，读取block内容
     s = t->InternalGet(options, k, arg, saver);
     cache_->Release(handle);
   }

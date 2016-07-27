@@ -33,6 +33,7 @@ size_t MemTable::ApproximateMemoryUsage() { return arena_.MemoryUsage(); }
 int MemTable::KeyComparator::operator()(const char* aptr, const char* bptr)
     const {
   // Internal keys are encoded as length-prefixed strings.
+  // 实际上aptr以及bptr里都存放了key/value，此处的比较函数只对key进行了比较
   Slice a = GetLengthPrefixedSlice(aptr);
   Slice b = GetLengthPrefixedSlice(bptr);
   return comparator.Compare(a, b);
@@ -85,6 +86,7 @@ void MemTable::Add(SequenceNumber s, ValueType type,
   // Format of an entry is concatenation of:
   //  key_size     : varint32 of internal_key.size()
   //  key bytes    : char[internal_key.size()]
+  //  tag          : 8 bits with packed sequence number and type
   //  value_size   : varint32 of value.size()
   //  value bytes  : char[value.size()]
   size_t key_size = key.size();
@@ -102,7 +104,7 @@ void MemTable::Add(SequenceNumber s, ValueType type,
   p = EncodeVarint32(p, val_size);
   memcpy(p, value.data(), val_size);
   assert((p + val_size) - buf == encoded_len);
-  // @1Feng: key value 是组合在一起存放到skiplist里面的，那查找的时候是如何搞的？
+  // skiplist的比较函数只对key部分进行比较, value部分不参与排序比较
   table_.Insert(buf);
 }
 
