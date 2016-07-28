@@ -186,6 +186,7 @@ Iterator* Table::BlockReader(void* arg,
       EncodeFixed64(cache_key_buffer+8, handle.offset());
       Slice key(cache_key_buffer, sizeof(cache_key_buffer));
       // 先去block cache里查找
+      // 一旦lookup成功(handle返回不为null)，lookup内部会对handle增加引用计数
       cache_handle = block_cache->Lookup(key);
       if (cache_handle != NULL) {
         block = reinterpret_cast<Block*>(block_cache->Value(cache_handle));
@@ -213,13 +214,12 @@ Iterator* Table::BlockReader(void* arg,
   if (block != NULL) {
     iter = block->NewIterator(table->rep_->options.comparator);
     if (cache_handle == NULL) {
-      // 如果之前查找没有命中缓存
-      // 释放掉block变量的内存??
+      // 如果之前查找没有命中缓存, 说明block的内容是刚刚new出来的
+      // 注册一个delete函数，等iter析构时执行
       iter->RegisterCleanup(&DeleteBlock, block, NULL);
     } else {
-      // 如果命中了缓存
-      // 减小cache_handle的引用计数
-      // @1Feng: why?
+      // 如果命中了缓存, 说明block是指向的block_cache中的数据(其实就是cache_handle)
+      // 所以析构的时候只需要减小(cache_handle)引用计数即可
       iter->RegisterCleanup(&ReleaseBlock, block_cache, cache_handle);
     }
   } else {
