@@ -11,6 +11,7 @@
 
 namespace leveldb {
 
+// table_cache里存放的数据,key是fimenumber
 struct TableAndFile {
   RandomAccessFile* file;
   Table* table;
@@ -45,6 +46,7 @@ TableCache::~TableCache() {
 Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
                              Cache::Handle** handle) {
   Status s;
+  // 构造出table_cache的key，即file_number
   char buf[sizeof(file_number)];
   EncodeFixed64(buf, file_number);
   Slice key(buf, sizeof(buf));
@@ -65,7 +67,7 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
       }
     }
     if (s.ok()) {
-      // 一次文件读取？
+      // 一次文件读取, 读取index block
       s = Table::Open(*options_, file, file_size, &table);
     }
 
@@ -121,7 +123,7 @@ Status TableCache::Get(const ReadOptions& options,
   if (s.ok()) {
     // 避免在cache中再查找了，直接用上文中返回的handle，取table进行查找
     Table* t = reinterpret_cast<TableAndFile*>(cache_->Value(handle))->table;
-    // 如果cache里没有，则触发第二次文件读取，读取block内容
+    // 如果cache里没有，则触发第二次文件读取，读取data block内容
     s = t->InternalGet(options, k, arg, saver);
     cache_->Release(handle);
   }

@@ -19,6 +19,7 @@ struct ReadOptions;
 
 // BlockHandle is a pointer to the extent of a file that stores a data
 // block or a meta block.
+// BlockHandle标识了一个sst文件内的block的起始位置(offset)和大小(size)
 class BlockHandle {
  public:
   BlockHandle();
@@ -35,6 +36,7 @@ class BlockHandle {
   Status DecodeFrom(Slice* input);
 
   // Maximum encoding length of a BlockHandle
+  // 因为是使用的VarInt64编码，所以每个unint64_t需要1-10个byte
   enum { kMaxEncodedLength = 10 + 10 };
 
  private:
@@ -42,6 +44,43 @@ class BlockHandle {
   uint64_t size_;
 };
 
+// 文件的Footer(页脚)，标识了两个重要的存放索引的block的位置（index block 和 metablock index）
+// 一个完整的文件结构如下：
+//   -----------------------------------------------
+//   |    data block    |                      |
+//   --------------------                      |
+//   |      ... ...     |                      |
+//   --------------------                      |
+//   |    data block    |                      |
+//   --------------------                      |
+//   |    meta block    |                      |
+//   --------------------                      |
+//   |      ... ...     |                      |
+//   --------------------                      |
+//   |    meta block    |                   sstable
+//   --------------------                      |
+//   |  metablock index |                      |
+//   --------------------                      |
+//   |  index block     |                      |
+//   --------------------------------          |
+//   | metaindex_handle |      |               |
+//   --------------------      |               |
+//   |   index_handle   |      |               |
+//   --------------------    Footer            |
+//   |     padding      |      |               |
+//   --------------------      |               |
+//   |  magic number    |      |               |
+//   -----------------------------------------------
+//
+// 其中：
+//   index block 存放了所有的data block的索引
+//     一条data block索引格式如下：
+//             --------------------------------------------------
+//             | a key >= the last key in block | offset | size |
+//             --------------------------------------------------
+//   metablock index 存放了所有的metablock的索引
+//   因为两个handle都使用的变长的编码规则,padding用来当20×2个字节没用完时做填充
+//
 // Footer encapsulates the fixed information stored at the tail
 // end of every table file.
 class Footer {

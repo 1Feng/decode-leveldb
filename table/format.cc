@@ -41,7 +41,10 @@ void Footer::EncodeTo(std::string* dst) const {
 }
 
 Status Footer::DecodeFrom(Slice* input) {
+  // 直接跳到magic number字段处
   const char* magic_ptr = input->data() + kEncodedLength - 8;
+  // 不明白为啥是分两块存放magic number，而不是直接fix64
+  // @1Feng
   const uint32_t magic_lo = DecodeFixed32(magic_ptr);
   const uint32_t magic_hi = DecodeFixed32(magic_ptr + 4);
   const uint64_t magic = ((static_cast<uint64_t>(magic_hi) << 32) |
@@ -50,6 +53,8 @@ Status Footer::DecodeFrom(Slice* input) {
     return Status::Corruption("not an sstable (bad magic number)");
   }
 
+  // 由于VarInt解码的时候指针自动后移动，所以调用返回后
+  // input指向了index_handle的位置
   Status result = metaindex_handle_.DecodeFrom(input);
   if (result.ok()) {
     result = index_handle_.DecodeFrom(input);
@@ -57,7 +62,8 @@ Status Footer::DecodeFrom(Slice* input) {
   if (result.ok()) {
     // We skip over any leftover data (just padding for now) in "input"
     const char* end = magic_ptr + 8;
-    *input = Slice(end, input->data() + input->size() - end);
+    // 感觉input里已经为空了啊?
+    *input = Slice(end, input->data() + input->size() - end/*always zero ??@1Feng*/);
   }
   return result;
 }

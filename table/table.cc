@@ -45,6 +45,7 @@ Status Table::Open(const Options& options,
   }
 
   char footer_space[Footer::kEncodedLength];
+  // footer_input其实就是指向了footer_space的内存
   Slice footer_input;
   Status s = file->Read(size - Footer::kEncodedLength, Footer::kEncodedLength,
                         &footer_input, footer_space);
@@ -75,6 +76,7 @@ Status Table::Open(const Options& options,
     rep->options = options;
     rep->file = file;
     rep->metaindex_handle = footer.metaindex_handle();
+    // index block的内容存放在了rep->index_block里
     rep->index_block = index_block;
     rep->cache_id = (options.block_cache ? options.block_cache->NewId() : 0);
     rep->filter_data = NULL;
@@ -179,6 +181,7 @@ Iterator* Table::BlockReader(void* arg,
     BlockContents contents;
     if (block_cache != NULL) {
       char cache_key_buffer[16];
+      // 构造block_cache 的key
       EncodeFixed64(cache_key_buffer, table->rep_->cache_id);
       EncodeFixed64(cache_key_buffer+8, handle.offset());
       Slice key(cache_key_buffer, sizeof(cache_key_buffer));
@@ -187,11 +190,10 @@ Iterator* Table::BlockReader(void* arg,
       if (cache_handle != NULL) {
         block = reinterpret_cast<Block*>(block_cache->Value(cache_handle));
       } else {
-        // 如果cache miss则读取block，触发第二次磁盘操作
+        // 如果cache miss则读取data block，触发第二次磁盘操作
         s = ReadBlock(table->rep_->file, options, handle, &contents);
         if (s.ok()) {
-          // @1Feng:
-          // block_cache里放的是Block结构, key 是？？？
+          // block_cache里放的是Block结构, key 是cache_id和block在sstable中的offset
           block = new Block(contents);
           if (contents.cachable && options.fill_cache) {
             cache_handle = block_cache->Insert(
@@ -211,8 +213,13 @@ Iterator* Table::BlockReader(void* arg,
   if (block != NULL) {
     iter = block->NewIterator(table->rep_->options.comparator);
     if (cache_handle == NULL) {
+      // 如果之前查找没有命中缓存
+      // 释放掉block变量的内存??
       iter->RegisterCleanup(&DeleteBlock, block, NULL);
     } else {
+      // 如果命中了缓存
+      // 减小cache_handle的引用计数
+      // @1Feng: why?
       iter->RegisterCleanup(&ReleaseBlock, block_cache, cache_handle);
     }
   } else {
@@ -232,6 +239,7 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k,
                           void (*saver)(void*, const Slice&, const Slice&)) {
   Status s;
   Iterator* iiter = rep_->index_block->NewIterator(rep_->options.comparator);
+  // 在index block里查找k的位置
   iiter->Seek(k);
   if (iiter->Valid()) {
     Slice handle_value = iiter->value(); // 这里这个value是啥？

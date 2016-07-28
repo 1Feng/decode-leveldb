@@ -14,6 +14,9 @@ namespace leveldb {
 
 class VersionSet;
 
+// @1Feng: manifest里的数据？
+// 记录了文件编号， 文件大小，最小key，最大key
+// sstable文件的命名就是按照file number + 特定后缀完成的
 struct FileMetaData {
   int refs;
   int allowed_seeks;          // Seeks allowed until compaction
