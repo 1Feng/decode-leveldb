@@ -53,6 +53,8 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
   // 这里的cache只是table cache，存放的是文件handle，table的指针
   // table里存放了sstable的index内容，以及指示block_cache的cache_id
   // 注意和block cache做区分
+  // 如果返回的handle不为NULL，lookup内部会增加其引用计数
+  // 所以，调用放在使用玩handle之后后需要减少其引用计数
   *handle = cache_->Lookup(key);
   // 如果 *handle != NULL,说明命中缓存,直接返回OK
   if (*handle == NULL) {
@@ -82,6 +84,8 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
       tf->file = file;
       tf->table = table;
       // 把key， tf组织进一个LRUHandle中，插入LRU-cache内，然后返回这个LRUHandle
+      // 返回handle同样会增加其引用计数，由调用方负责减小这个值
+      // 如果这个值减小到0,会通过DeleteEnty来真正释放
       *handle = cache_->Insert(key, tf, 1, &DeleteEntry);
     }
   }

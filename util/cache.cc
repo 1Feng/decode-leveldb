@@ -24,6 +24,10 @@ namespace {
 // reference on the entry.  The only ways that this can become false without the
 // entry being passed to its "deleter" are via Erase(), via Insert() when
 // an element with a duplicate key is inserted, or on destruction of the cache.
+// 以下情况下，in_cache 会变为 false:
+// 1. 被Erase(),但是并没有被真正释放掉（引用计数并没有变为0）
+// 2. 通过Insert()插入了一个cache中已经存在的key，旧的 in_cache 变为false
+// 3. cache 析构
 //
 // The cache keeps two linked lists of items in the cache.  All items in the
 // cache are in one list or the other, and never both.  Items still referenced
@@ -42,7 +46,7 @@ namespace {
 struct LRUHandle {
   void* value;
   void (*deleter)(const Slice&, void* value);
-  LRUHandle* next_hash;
+  LRUHandle* next_hash;  // HandleTalbe组织的hash表中同一个slot的中的handle通过该指针连接
   LRUHandle* next;
   LRUHandle* prev;
   size_t charge;      // TODO(opt): Only allow uint32_t?
@@ -68,6 +72,24 @@ struct LRUHandle {
 // table implementations in some of the compiler/runtime combinations
 // we have tested.  E.g., readrandom speeds up by ~5% over the g++
 // 4.4.3's builtin hashtable.
+//
+//  HandleTable的结构大致如下：
+//  散列函数： index = handle->hash & (length_ - 1)
+//
+//                               --------------       -----------                   -----------
+//   list_[0]                   |  LRUHandle*  |---->| LRUHandle |---next_hash---->| LRUHandle |---next_hash---->NULL
+//                               --------------       -----------                   -----------
+//   list_[1]                   |  LRUHandle*  |----->NULL
+//                               --------------       -----------
+//   list_[2]                   |  LRUHandle*  |---->| LRUHandle |---next_hash---->NULL
+//                               --------------       -----------
+//    ...                       |  LRUHandle*  |
+//                               --------------       -----------                   -----------
+//   list_[length_ - 2]         |  LRUHandle*  |---->| LRUHandle |---next_hash---->| LRUHandle |---next_hash---->NULL
+//                               --------------       -----------                   -----------
+//   list_[length_ - 1]         |  LRUHandle*  |----->NULL
+//                               --------------
+//
 class HandleTable {
  public:
   HandleTable() : length_(0), elems_(0), list_(NULL) { Resize(); }
@@ -114,6 +136,7 @@ class HandleTable {
   // matches key/hash.  If there is no such cache entry, return a
   // pointer to the trailing slot in the corresponding linked list.
   LRUHandle** FindPointer(const Slice& key, uint32_t hash) {
+    // hash & (length - 1) 就是散列到slot上的规则
     LRUHandle** ptr = &list_[hash & (length_ - 1)];
     while (*ptr != NULL &&
            ((*ptr)->hash != hash || key != (*ptr)->key())) {
@@ -183,7 +206,7 @@ class LRUCache {
 
   // mutex_ protects the following state.
   mutable port::Mutex mutex_;
-  size_t usage_;
+  size_t usage_;   // lru_和in_use_总的字节数
 
   // Dummy head of LRU list.
   // lru.prev is newest entry, lru.next is oldest entry.
@@ -200,6 +223,7 @@ class LRUCache {
 LRUCache::LRUCache()
     : usage_(0) {
   // Make empty circular linked lists.
+  // 环状双向链表
   lru_.next = &lru_;
   lru_.prev = &lru_;
   in_use_.next = &in_use_;
@@ -285,11 +309,19 @@ Cache::Handle* LRUCache::Insert(
   if (capacity_ > 0) {
     e->refs++;  // for the cache's reference.
     e->in_cache = true;
+    // 由于接下来要返回出去，所以直接插入到in_use_中
     LRU_Append(&in_use_, e);
     usage_ += charge;
+    // 插入到HandleTable中，如果存在旧的handle，直接返回出来，FinishErase掉
     FinishErase(table_.Insert(e));
   } // else don't cache.  (Tests use capacity_==0 to turn off caching.)
 
+  // 释放空间
+  // 注：
+  //   当handle全都在in_use_中的时候，有可能会发生lru为空，但是usage_超出容量
+  //
+  //   只要handle被使用，都会放到in_use_中，一旦URef,如果引用计数不为0,就会重新
+  //   插入回lru_->prev的位置;所以lru_->next永远都是最近最少使用的handle
   while (usage_ > capacity_ && lru_.next != &lru_) {
     LRUHandle* old = lru_.next;
     assert(old->refs == 1);
