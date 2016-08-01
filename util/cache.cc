@@ -100,18 +100,23 @@ class HandleTable {
   }
 
   LRUHandle* Insert(LRUHandle* h) {
+    // 先查找当前key是否已经存在，存在说明有陈旧的缓存
     LRUHandle** ptr = FindPointer(h->key(), h->hash);
     LRUHandle* old = *ptr;
+    // 替换掉old的位置
     h->next_hash = (old == NULL ? NULL : old->next_hash);
     *ptr = h;
     if (old == NULL) {
       ++elems_;
+      // resize的触发条件意味着平均每个bucket只有一个handle？
+      // @1Feng
       if (elems_ > length_) {
         // Since each cache entry is fairly large, we aim for a small
         // average linked list length (<= 1).
         Resize();
       }
     }
+    // 返回old， 由外面负责释放其内存
     return old;
   }
 
@@ -136,7 +141,7 @@ class HandleTable {
   // matches key/hash.  If there is no such cache entry, return a
   // pointer to the trailing slot in the corresponding linked list.
   LRUHandle** FindPointer(const Slice& key, uint32_t hash) {
-    // hash & (length - 1) 就是散列到slot上的规则
+    // hash & (length - 1) 就是散列到buckets上的规则
     LRUHandle** ptr = &list_[hash & (length_ - 1)];
     while (*ptr != NULL &&
            ((*ptr)->hash != hash || key != (*ptr)->key())) {
@@ -159,7 +164,8 @@ class HandleTable {
         LRUHandle* next = h->next_hash;
         uint32_t hash = h->hash;
         LRUHandle** ptr = &new_list[hash & (new_length - 1)];
-        h->next_hash = *ptr;
+        // 插入到buckets头部
+        h->next_hash = *ptr;  // *ptr == NULL 或者 指向slot内首个handle
         *ptr = h;
         h = next;
         count++;
