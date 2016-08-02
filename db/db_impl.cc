@@ -108,6 +108,8 @@ Options SanitizeOptions(const std::string& dbname,
     }
   }
   if (result.block_cache == NULL) {
+    // 2^23？？为啥？
+    // @1Feng
     result.block_cache = NewLRUCache(8 << 20);
   }
   return result;
@@ -137,6 +139,8 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
   has_imm_.Release_Store(NULL);
 
   // Reserve ten files or so for other uses and give the rest to TableCache.
+  // 按照最大打开文件数来决定table_cache_size又是几个意思？
+  // @1Feng
   const int table_cache_size = options_.max_open_files - kNumNonTableCacheFiles;
   table_cache_ = new TableCache(dbname_, &options_, table_cache_size);
 

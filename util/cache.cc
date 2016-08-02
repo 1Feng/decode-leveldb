@@ -120,6 +120,7 @@ class HandleTable {
     return old;
   }
 
+  // 返回被remove掉的handle，如果没有则返回NULL
   LRUHandle* Remove(const Slice& key, uint32_t hash) {
     LRUHandle** ptr = FindPointer(key, hash);
     LRUHandle* result = *ptr;
@@ -236,6 +237,8 @@ LRUCache::LRUCache()
   in_use_.prev = &in_use_;
 }
 
+// 在哪保证的析构发生的时候in_use_是空list
+// @1Feng
 LRUCache::~LRUCache() {
   assert(in_use_.next == &in_use_);  // Error if caller has an unreleased handle
   for (LRUHandle* e = lru_.next; e != &lru_; ) {
@@ -286,6 +289,7 @@ Cache::Handle* LRUCache::Lookup(const Slice& key, uint32_t hash) {
   MutexLock l(&mutex_);
   LRUHandle* e = table_.Lookup(key, hash);
   if (e != NULL) {
+    // 增加引用计数，并移动到in_use_里面，如果已经在里面，则仅仅增加引用计数
     Ref(e);
   }
   return reinterpret_cast<Cache::Handle*>(e);
@@ -324,10 +328,10 @@ Cache::Handle* LRUCache::Insert(
 
   // 释放空间
   // 注：
-  //   当handle全都在in_use_中的时候，有可能会发生lru为空，但是usage_超出容量
-  //
   //   只要handle被使用，都会放到in_use_中，一旦URef,如果引用计数不为0,就会重新
   //   插入回lru_->prev的位置;所以lru_->next永远都是最近最少使用的handle
+  //
+  //   当handle全都在in_use_中的时候，有可能会发生lru为空，但是usage_超出容量
   while (usage_ > capacity_ && lru_.next != &lru_) {
     LRUHandle* old = lru_.next;
     assert(old->refs == 1);
@@ -342,6 +346,8 @@ Cache::Handle* LRUCache::Insert(
 
 // If e != NULL, finish removing *e from the cache; it has already been removed
 // from the hash table.  Return whether e != NULL.  Requires mutex_ held.
+// 如果进入函数时e == NULL, 则没有必要取释放，返回false
+// 如果进入函数时e != NULL, 释放后并没有赋值为NULL,所以返回也必然时true
 bool LRUCache::FinishErase(LRUHandle* e) {
   if (e != NULL) {
     assert(e->in_cache);
@@ -355,14 +361,18 @@ bool LRUCache::FinishErase(LRUHandle* e) {
 
 void LRUCache::Erase(const Slice& key, uint32_t hash) {
   MutexLock l(&mutex_);
+  // 直接将返回的handle释放掉
   FinishErase(table_.Remove(key, hash));
 }
 
+// 清空lru list
 void LRUCache::Prune() {
   MutexLock l(&mutex_);
+  // 如果lru不是空list
   while (lru_.next != &lru_) {
     LRUHandle* e = lru_.next;
     assert(e->refs == 1);
+    // handle从list中移走的逻辑是在FinishErase中进行的
     bool erased = FinishErase(table_.Remove(e->key(), e->hash));
     if (!erased) {  // to avoid unused variable when compiled NDEBUG
       assert(erased);
@@ -375,6 +385,8 @@ static const int kNumShards = 1 << kNumShardBits;
 
 class ShardedLRUCache : public Cache {
  private:
+  // 分了好多组LRUCache, why?
+  // @1Feng
   LRUCache shard_[kNumShards];
   port::Mutex id_mutex_;
   uint64_t last_id_;
@@ -384,12 +396,15 @@ class ShardedLRUCache : public Cache {
   }
 
   static uint32_t Shard(uint32_t hash) {
+    // 去掉高28bit
     return hash >> (32 - kNumShardBits);
   }
 
  public:
   explicit ShardedLRUCache(size_t capacity)
       : last_id_(0) {
+    // 默认是 (capacity ＋ 15)/16
+    // 一个字节是8个bits，所以这里除以16是什么意思?
     const size_t per_shard = (capacity + (kNumShards - 1)) / kNumShards;
     for (int s = 0; s < kNumShards; s++) {
       shard_[s].SetCapacity(per_shard);
