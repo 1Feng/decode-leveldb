@@ -189,9 +189,9 @@ inline bool ParseInternalKey(const Slice& internal_key,
 // lookup key format:
 // start_       kstart_                                         end_
 //   |             |                                             |
+//   |             |<--user_key-->|                              |
+//   |             |<---------------internal_key---------------->|
 //   |<---------------------memtable_key------------------------>|
-//                 |<--user_key-->|
-//                 |<---------------internal_key---------------->|
 //   -------------------------------------------------------------
 //   |  1--5 byte  | klenght byte |           8 byte             |
 //   -------------------------------------------------------------
