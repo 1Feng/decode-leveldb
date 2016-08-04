@@ -33,7 +33,7 @@ class Writer {
   Status AddRecord(const Slice& slice);
 
  private:
-  WritableFile* dest_;
+  WritableFile* dest_;     // linux 下为 PosixWritableFile
   int block_offset_;       // Current offset in block
 
   // crc32c values for all supported record types.  These are

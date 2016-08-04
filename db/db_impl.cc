@@ -491,6 +491,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
 Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
                                 Version* base) {
   mutex_.AssertHeld();
+  // 获取当前时间戳，微秒级别
   const uint64_t start_micros = env_->NowMicros();
   FileMetaData meta;
   meta.number = versions_->NewFileNumber();
@@ -502,6 +503,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
   Status s;
   {
     mutex_.Unlock();
+    // 写入sstable file
     s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta);
     mutex_.Lock();
   }
@@ -682,7 +684,8 @@ void DBImpl::BackgroundCall() {
 
   // Previous compaction may have produced too many files in a level,
   // so reschedule another compaction if needed.
-  // @1Feng: 这么无休止的调用下去，是否会一直有个后台线程层层递归的去进行compact？
+  // @1Feng:
+  // 这么无休止的调用下去，是否会一直有个后台线程层层递归的去进行compact？
   MaybeScheduleCompaction();
   bg_cv_.SignalAll();
 }
@@ -1230,9 +1233,11 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
     // into mem_.
     {
       mutex_.Unlock();
+      // 先写日志
       status = log_->AddRecord(WriteBatchInternal::Contents(updates));
       bool sync_error = false;
       if (status.ok() && options.sync) {
+        // 其实AddRecord里执行过fflush了，但是Sync里面还是会再执行一遍
         status = logfile_->Sync();
         if (!status.ok()) {
           sync_error = true;

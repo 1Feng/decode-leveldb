@@ -206,6 +206,7 @@ class PosixWritableFile : public WritableFile {
     return result;
   }
 
+  // 将user-space的缓存区的数据刷新到kernal-sapce缓存区
   virtual Status Flush() {
     if (fflush_unlocked(file_) != 0) {
       return IOError(filename_, errno);
@@ -215,6 +216,7 @@ class PosixWritableFile : public WritableFile {
 
   Status SyncDirIfManifest() {
     const char* f = filename_.c_str();
+    // 返回f中最后一个/的指针
     const char* sep = strrchr(f, '/');
     Slice basename;
     std::string dir;
@@ -227,6 +229,8 @@ class PosixWritableFile : public WritableFile {
     }
     Status s;
     if (basename.starts_with("MANIFEST")) {
+      // @1Feng:
+      // 打开文件夹，然后fsync是几个意思？
       int fd = open(dir.c_str(), O_RDONLY);
       if (fd < 0) {
         s = IOError(dir, errno);
@@ -240,6 +244,7 @@ class PosixWritableFile : public WritableFile {
     return s;
   }
 
+  // 确保将数据同步写入磁盘
   virtual Status Sync() {
     // Ensure new files referred to by the manifest are in the filesystem.
     Status s = SyncDirIfManifest();
