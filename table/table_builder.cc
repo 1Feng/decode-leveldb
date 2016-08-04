@@ -99,9 +99,13 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
 
   if (r->pending_index_entry) {
     assert(r->data_block.empty());
+    // 查找相同前缀，如果存在，last_key里只保存该前缀，
+    // 否则里面内容不变，前缀用于前缀压缩
     r->options.comparator->FindShortestSeparator(&r->last_key, key);
     std::string handle_encoding;
+    // 构造空的block handle， offset ＝ 0， size ＝ 0
     r->pending_handle.EncodeTo(&handle_encoding);
+    // 构造 index block, 这里放last_key是前缀
     r->index_block.Add(r->last_key, Slice(handle_encoding));
     r->pending_index_entry = false;
   }

@@ -34,6 +34,7 @@ Status BuildTable(const std::string& dbname,
 
     TableBuilder* builder = new TableBuilder(options, file);
     meta->smallest.DecodeFrom(iter->key());
+    // 利用iter遍历memtable
     for (; iter->Valid(); iter->Next()) {
       Slice key = iter->key();
       meta->largest.DecodeFrom(key);

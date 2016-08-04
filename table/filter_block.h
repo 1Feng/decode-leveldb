@@ -26,6 +26,7 @@ class FilterPolicy;
 //
 // The sequence of calls to FilterBlockBuilder must match the regexp:
 //      (StartBlock AddKey*)* Finish
+// @1Feng: 注意这个特殊的block
 class FilterBlockBuilder {
  public:
   explicit FilterBlockBuilder(const FilterPolicy*);

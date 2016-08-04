@@ -111,7 +111,7 @@ static bool BeforeFile(const Comparator* ucmp,
 
 bool SomeFileOverlapsRange(
     const InternalKeyComparator& icmp,
-    bool disjoint_sorted_files,
+    bool disjoint_sorted_files,  // 不相交的，排序的文件; @1Feng 啥意思？
     const std::vector<FileMetaData*>& files,
     const Slice* smallest_user_key,
     const Slice* largest_user_key) {
@@ -515,6 +515,7 @@ int Version::PickLevelForMemTableOutput(
       }
       if (level + 2 < config::kNumLevels) {
         // Check that file does not overlap too many grandparent bytes.
+        // @1Feng 没明白这段逻辑是干啥？？
         GetOverlappingInputs(level + 2, &start, &limit, &overlaps);
         const int64_t sum = TotalFileSize(overlaps);
         if (sum > kMaxGrandParentOverlapBytes) {

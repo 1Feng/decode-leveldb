@@ -523,6 +523,10 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
     const Slice min_user_key = meta.smallest.user_key();
     const Slice max_user_key = meta.largest.user_key();
     if (base != NULL) {
+      // memtable compact之后的sstable并不一定放在level0
+      // 最大不会超过2
+      // 具体确定放在哪个level的逻辑还是没看懂
+      // @1Feng
       level = base->PickLevelForMemTableOutput(min_user_key, max_user_key);
     }
     edit->AddFile(level, meta.number, meta.file_size,
