@@ -499,6 +499,11 @@ bool Version::OverlapInLevel(int level,
                                smallest_user_key, largest_user_key);
 }
 
+// memtable生成的sstable不一定就放在levle0
+// 毕竟由于key重叠的问题levle-0的compact开销较大;
+// levle选择策略如下：
+//  从0---n,依次查找，找到第一个与之存在key重叠的levle
+//  默认 n == 2
 int Version::PickLevelForMemTableOutput(
     const Slice& smallest_user_key,
     const Slice& largest_user_key) {
@@ -515,7 +520,9 @@ int Version::PickLevelForMemTableOutput(
       }
       if (level + 2 < config::kNumLevels) {
         // Check that file does not overlap too many grandparent bytes.
-        // @1Feng 没明白这段逻辑是干啥？？
+        // 当新生产的sstable要放在levle+1这层的时候，需要保证其与
+        // level+2直接不要有过多的key重叠，避免接下来levle+1进行
+        // compact的时候，压力过大
         GetOverlappingInputs(level + 2, &start, &limit, &overlaps);
         const int64_t sum = TotalFileSize(overlaps);
         if (sum > kMaxGrandParentOverlapBytes) {
@@ -556,6 +563,11 @@ void Version::GetOverlappingInputs(
     } else {
       inputs->push_back(f);
       if (level == 0) {
+        // levle-0里的sstable之间本身就存在key重叠
+        // 比如levle-0需要compact的时候，如果你选择的是begin，end所在的sstable
+        // 跟他key有重叠的sstable就要一起参与compact
+        // 同时，如果某个与之存在重叠的sstable的key-start < begin or key-end > end
+        // 则与key-start，key-end有重叠的sstable也要被involve进来
         // Level-0 files may overlap each other.  So check if the newly
         // added file has expanded the range.  If so, restart search.
         if (begin != NULL && user_cmp->Compare(file_start, user_begin) < 0) {

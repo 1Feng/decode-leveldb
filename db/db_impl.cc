@@ -523,12 +523,10 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
     const Slice min_user_key = meta.smallest.user_key();
     const Slice max_user_key = meta.largest.user_key();
     if (base != NULL) {
-      // memtable compact之后的sstable并不一定放在level0
-      // 最大不会超过2
-      // 具体确定放在哪个level的逻辑还是没看懂
-      // @1Feng
+      // 确定具体放在哪个level
       level = base->PickLevelForMemTableOutput(min_user_key, max_user_key);
     }
+    // 新生成的sstable文件的meta数据存入VersionEdit._new_files里
     edit->AddFile(level, meta.number, meta.file_size,
                   meta.smallest, meta.largest);
   }
@@ -694,6 +692,7 @@ void DBImpl::BackgroundCall() {
   bg_cv_.SignalAll();
 }
 
+// 后台进行compact的逻辑
 void DBImpl::BackgroundCompaction() {
   mutex_.AssertHeld();
 
@@ -1495,8 +1494,7 @@ void DBImpl::GetApproximateSizes(
     InternalKey k1(range[i].start, kMaxSequenceNumber, kValueTypeForSeek);
     InternalKey k2(range[i].limit, kMaxSequenceNumber, kValueTypeForSeek);
     uint64_t start = versions_->ApproximateOffsetOf(v, k1);
-    uint64_t limit = versions_->ApproximateOffsetOf(v, k2);
-    sizes[i] = (limit >= start ? limit - start : 0);
+    uint64_t limit = versions_->ApproximateOffsetOf(v, k2); sizes[i] = (limit >= start ? limit - start : 0);
   }
 
   {
