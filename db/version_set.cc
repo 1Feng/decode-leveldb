@@ -648,6 +648,7 @@ class VersionSet::Builder {
     base_->Ref();
     BySmallestKey cmp;
     cmp.internal_comparator = &vset_->icmp_;
+    // 空levels_
     for (int level = 0; level < config::kNumLevels; level++) {
       levels_[level].added_files = new FileSet(cmp);
     }
@@ -663,6 +664,8 @@ class VersionSet::Builder {
         to_unref.push_back(*it);
       }
       delete added;
+      // 为什么不直接在上面的循环中进行refs
+      // @1Feng
       for (uint32_t i = 0; i < to_unref.size(); i++) {
         FileMetaData* f = to_unref[i];
         f->refs--;
@@ -679,6 +682,7 @@ class VersionSet::Builder {
     // Update compaction pointers
     for (size_t i = 0; i < edit->compact_pointers_.size(); i++) {
       const int level = edit->compact_pointers_[i].first;
+      // Builder中唯一一处对VersionSet做改动的地方
       vset_->compact_pointer_[level] =
           edit->compact_pointers_[i].second.Encode().ToString();
     }
@@ -712,9 +716,13 @@ class VersionSet::Builder {
       // same as the compaction of 40KB of data.  We are a little
       // conservative and allow approximately one seek for every 16KB
       // of data before triggering a compaction.
-      f->allowed_seeks = (f->file_size / 16384);
+      // 不太理解
+      f->allowed_seeks = (f->file_size / 16384);    // 2^14 == 16384 == 16kb
       if (f->allowed_seeks < 100) f->allowed_seeks = 100;
 
+      // 为什么要在delete_files里面去erase,难道对于VersionEdit
+      // 可能同一个文件，既出现在delete_file里，也是new_file?
+      // @1Feng
       levels_[level].deleted_files.erase(f->number);
       levels_[level].added_files->insert(f);
     }
@@ -736,6 +744,8 @@ class VersionSet::Builder {
            added_iter != added->end();
            ++added_iter) {
         // Add all smaller files listed in base_
+        // 把同base_->files_中同一levle的，比当前文件小的文件的metadata添加在v-files_中
+        // 然后再添加当前文件的metadata
         for (std::vector<FileMetaData*>::const_iterator bpos
                  = std::upper_bound(base_iter, base_end, *added_iter, cmp);
              base_iter != bpos;
@@ -1086,9 +1096,12 @@ void VersionSet::Finalize(Version* v) {
       // We treat level-0 specially by bounding the number of files
       // instead of number of bytes for two reasons:
       //
+      // 对于较大的write buffer, 不过多的进行levle-0的compactions是好的
       // (1) With larger write-buffer sizes, it is nice not to do too
       // many level-0 compactions.
       //
+      // 因为每次读操作都会触发level-0的归并，因此当个别的文件size很小的时候
+      // 我们期望避免level-0有太多文件存在
       // (2) The files in level-0 are merged on every read and
       // therefore we wish to avoid too many files when the individual
       // file size is small (perhaps because of a small write-buffer
@@ -1366,6 +1379,10 @@ void VersionSet::SetupOtherInputs(Compaction* c) {
   InternalKey all_start, all_limit;
   GetRange2(c->inputs_[0], c->inputs_[1], &all_start, &all_limit);
 
+  // level 的key范围是b~f, 待compact的key范围是d~e,
+  // level + 1待compact的key范围是b~f, 因此我们可以扩展下level下的key范围
+  // level待compact的范围提升至b~e,同时保证使用这个范围进行compact时
+  // levle + 1下的key范围不会再发生扩大
   // See if we can grow the number of inputs in "level" without
   // changing the number of "level+1" files we pick up.
   if (!c->inputs_[1].empty()) {
@@ -1436,6 +1453,7 @@ Compaction* VersionSet::CompactRange(
   // But we cannot do this for level-0 since level-0 files can overlap
   // and we must not pick one file and drop another older file if the
   // two files overlap.
+  // 如果这个范围包含的数据过大，就截至到limit，有几个sstable算几个sstable
   if (level > 0) {
     const uint64_t limit = MaxFileSizeForLevel(level);
     uint64_t total = 0;
@@ -1453,6 +1471,7 @@ Compaction* VersionSet::CompactRange(
   c->input_version_ = current_;
   c->input_version_->Ref();
   c->inputs_[0] = inputs;
+  // 这里会把parent-level的相关key range所在的sstable包含进来
   SetupOtherInputs(c);
   return c;
 }

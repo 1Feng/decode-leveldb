@@ -135,6 +135,7 @@ class Version {
   int refs_;                    // Number of live refs to this version
 
   // List of files per level
+  // 每个level中的文件在vector中是从小到大排列的
   std::vector<FileMetaData*> files_[config::kNumLevels];
 
   // Next file to compact based on seek stats.

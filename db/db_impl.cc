@@ -706,6 +706,7 @@ void DBImpl::BackgroundCompaction() {
   InternalKey manual_end;
   if (is_manual) {
     ManualCompaction* m = manual_compaction_;
+    // @here
     c = versions_->CompactRange(m->level, m->begin, m->end);
     m->done = (c == NULL);
     if (c != NULL) {
