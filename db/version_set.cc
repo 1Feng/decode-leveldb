@@ -1336,8 +1336,11 @@ Compaction* VersionSet::PickCompaction() {
     for (size_t i = 0; i < current_->files_[level].size(); i++) {
       FileMetaData* f = current_->files_[level][i];
       if (compact_pointer_[level].empty() ||
-          // 这个比较的含义是什么？
-          // @1Feng
+          // 如果compact point为空，则从首个sstable开始compact
+          // 或者
+          // 如果某个sstable的largest key大于compact point，则当前sstable
+          // 被认定为待compact的sstable
+          // 注意：此处只选择一个sstable
           icmp_.Compare(f->largest.Encode(), compact_pointer_[level]) > 0) {
         c->inputs_[0].push_back(f);
         break;
@@ -1377,18 +1380,25 @@ Compaction* VersionSet::PickCompaction() {
 void VersionSet::SetupOtherInputs(Compaction* c) {
   const int level = c->level();
   InternalKey smallest, largest;
+  // 获取level-n待compact的sstable中的最小key，和最大key
   GetRange(c->inputs_[0], &smallest, &largest);
 
+  // 获取level-(n+1)中与level-n中待compact的sstable的key range(smallest ~~ largest)
+  // 存在key重叠的sstable，放在c->inputs[1]中
   current_->GetOverlappingInputs(level+1, &smallest, &largest, &c->inputs_[1]);
 
   // Get entire range covered by compaction
   InternalKey all_start, all_limit;
+  // 获取level-n和level-(n+1)综合的最小的key，最大key
   GetRange2(c->inputs_[0], c->inputs_[1], &all_start, &all_limit);
 
-  // level 的key范围是b~f, 待compact的key范围是d~e,
-  // level + 1待compact的key范围是b~f, 因此我们可以扩展下level下的key范围
-  // level待compact的范围提升至b~e,同时保证使用这个范围进行compact时
-  // levle + 1下的key范围不会再发生扩大
+  // 扩展待compact的key range
+  // 举例：
+  // level-n 的key范围是b~f, 待compact的key范围是d~e,
+  // level-(n + 1)待compact的key范围是b~f, 因此我们可以扩展下level下的key范围
+  // level-n待compact的范围提升至b~e,同时保证使用这个范围进行compact时
+  // levle-(n + 1)下的key范围不会再发生扩大
+  //
   // See if we can grow the number of inputs in "level" without
   // changing the number of "level+1" files we pick up.
   if (!c->inputs_[1].empty()) {
@@ -1404,6 +1414,8 @@ void VersionSet::SetupOtherInputs(Compaction* c) {
       std::vector<FileMetaData*> expanded1;
       current_->GetOverlappingInputs(level+1, &new_start, &new_limit,
                                      &expanded1);
+      // 当level-(n+1)的key range不会因为level-n的key range的放大而放大
+      // 的情况下，才对level-n进行key range放大
       if (expanded1.size() == c->inputs_[1].size()) {
         Log(options_->info_log,
             "Expanding@%d %d+%d (%ld+%ld bytes) to %d+%d (%ld+%ld bytes)\n",
@@ -1425,6 +1437,8 @@ void VersionSet::SetupOtherInputs(Compaction* c) {
 
   // Compute the set of grandparent files that overlap this compaction
   // (parent == level+1; grandparent == level+2)
+  // 存放重叠的sstable的数量，用于接下来对level-n进行compact的时候及时终止
+  // 避免level-(n+2)的key重叠过多，影响未来level-(n+1)与level-(n+2)未来compact的效率
   if (level + 2 < config::kNumLevels) {
     current_->GetOverlappingInputs(level + 2, &all_start, &all_limit,
                                    &c->grandparents_);
@@ -1441,6 +1455,8 @@ void VersionSet::SetupOtherInputs(Compaction* c) {
   // We update this immediately instead of waiting for the VersionEdit
   // to be applied so that if the compaction fails, we will try a different
   // key range next time.
+  // 针对level-n，下次compact会从这次compact的largest-key开始
+  // 同时，如果此次compact失败，重试的key range也会因此发生变化
   compact_pointer_[level] = largest.Encode().ToString();
   c->edit_.SetCompactPointer(level, largest);
 }
@@ -1450,6 +1466,7 @@ Compaction* VersionSet::CompactRange(
     const InternalKey* begin,
     const InternalKey* end) {
   std::vector<FileMetaData*> inputs;
+  // 找到有重叠的sstable，将metadata放在inputs里面
   current_->GetOverlappingInputs(level, begin, end, &inputs);
   if (inputs.empty()) {
     return NULL;

@@ -343,7 +343,7 @@ class Compaction {
   // Maximum size of files to build during this compaction.
   uint64_t MaxOutputFileSize() const { return max_output_file_size_; }
 
-  // Is this a trivial compaction that can be implemented by just
+  // Is this a trivial(平凡的,微不足道的) compaction that can be implemented by just
   // moving a single input file to the next level (no merging or splitting)
   bool IsTrivialMove() const;
 

@@ -707,9 +707,15 @@ void DBImpl::BackgroundCompaction() {
   if (is_manual) {
     ManualCompaction* m = manual_compaction_;
     c = versions_->CompactRange(m->level, m->begin, m->end);
+    // manual_compaction_中记录的key range在当前level没有重叠了
+    // 说明已经被compact过了？ @1Feng
+    // 此时c == NULL, 标记m->done 为 true
     m->done = (c == NULL);
     if (c != NULL) {
-      // c->input[0][c->input[0].size() - 1]->largest
+      // 即c->input[0][c->input[0].size() - 1]->largest
+      // c->input里的sstable metadata数据是按照level-n的sstable(即version->files_)
+      // 顺序填充的.所以，input里的数据也是有顺序的，最后一个的largest，就是level-n待
+      // compact的sstable里的largest key
       manual_end = c->input(0, c->num_input_files(0) - 1)->largest;
     }
     Log(options_.info_log,
@@ -734,6 +740,7 @@ void DBImpl::BackgroundCompaction() {
     // 添加到下一层
     c->edit()->AddFile(c->level() + 1, f->number, f->file_size,
                        f->smallest, f->largest);
+    // 提交VersionEdit
     status = versions_->LogAndApply(c->edit(), &mutex_);
     if (!status.ok()) {
       RecordBackgroundError(status);
@@ -769,6 +776,8 @@ void DBImpl::BackgroundCompaction() {
   if (is_manual) {
     ManualCompaction* m = manual_compaction_;
     if (!status.ok()) {
+      // compact失败错误的情况下，done被置为true
+      // why??? @1Feng
       m->done = true;
     }
     if (!m->done) {
@@ -777,6 +786,8 @@ void DBImpl::BackgroundCompaction() {
       m->tmp_storage = manual_end;
       m->begin = &m->tmp_storage;
     }
+    // 直接赋值为NULL??
+    // @1Feng
     manual_compaction_ = NULL;
   }
 }
@@ -920,7 +931,10 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   // Release mutex while we're actually doing the compaction work
   mutex_.Unlock();
 
+  // 返回的是MergingIterator，自带归并操作的iterator
   Iterator* input = versions_->MakeInputIterator(compact->compaction);
+  // 所有待归并的sstable都会seek-to-first,然后挑选出smallest key
+  // next操作也类似，就是在做归并操作
   input->SeekToFirst();
   Status status;
   ParsedInternalKey ikey;

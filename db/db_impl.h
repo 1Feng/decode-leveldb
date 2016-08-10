@@ -161,7 +161,7 @@ class DBImpl : public DB {
   // Information for a manual compaction
   struct ManualCompaction {
     int level;
-    bool done;
+    bool done;                  // true代表当前level已经做过compact了???
     const InternalKey* begin;   // NULL means beginning of key range
     const InternalKey* end;     // NULL means end of key range
     InternalKey tmp_storage;    // Used to keep track of compaction progress
