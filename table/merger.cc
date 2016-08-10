@@ -32,6 +32,9 @@ class MergingIterator : public Iterator {
     return (current_ != NULL);
   }
 
+  // 这里其实就是一个归并的逻辑
+  // 都SeekToFirst
+  // 挑最小的
   virtual void SeekToFirst() {
     for (int i = 0; i < n_; i++) {
       children_[i].SeekToFirst();

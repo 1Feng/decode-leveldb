@@ -658,7 +658,7 @@ void DBImpl::MaybeScheduleCompaction() {
   } else if (!bg_error_.ok()) {
     // Already got an error; no more changes
   } else if (imm_ == NULL &&
-             manual_compaction_ == NULL &&  // @1Feng: manual_compaction 含义是什么？什么时候会被赋值？
+             manual_compaction_ == NULL &&
              !versions_->NeedsCompaction()) {
     // No work to be done
   } else {
@@ -706,10 +706,10 @@ void DBImpl::BackgroundCompaction() {
   InternalKey manual_end;
   if (is_manual) {
     ManualCompaction* m = manual_compaction_;
-    // @here
     c = versions_->CompactRange(m->level, m->begin, m->end);
     m->done = (c == NULL);
     if (c != NULL) {
+      // c->input[0][c->input[0].size() - 1]->largest
       manual_end = c->input(0, c->num_input_files(0) - 1)->largest;
     }
     Log(options_.info_log,
@@ -729,7 +729,9 @@ void DBImpl::BackgroundCompaction() {
     // Move file to next level
     assert(c->num_input_files(0) == 1);
     FileMetaData* f = c->input(0, 0);
+    // 在上一层删除（逻辑上）
     c->edit()->DeleteFile(c->level(), f->number);
+    // 添加到下一层
     c->edit()->AddFile(c->level() + 1, f->number, f->file_size,
                        f->smallest, f->largest);
     status = versions_->LogAndApply(c->edit(), &mutex_);
@@ -834,6 +836,7 @@ Status DBImpl::FinishCompactionOutputFile(CompactionState* compact,
   Status s = input->status();
   const uint64_t current_entries = compact->builder->NumEntries();
   if (s.ok()) {
+    // dump 成sstable
     s = compact->builder->Finish();
   } else {
     compact->builder->Abandon();
@@ -926,6 +929,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   SequenceNumber last_sequence_for_key = kMaxSequenceNumber;
   for (; input->Valid() && !shutting_down_.Acquire_Load(); ) {
     // Prioritize immutable compaction work
+    // 之前不是已经对imm做过compact了么？为什么又来？
     if (has_imm_.NoBarrier_Load() != NULL) {
       const uint64_t imm_start = env_->NowMicros();
       mutex_.Lock();
@@ -938,6 +942,8 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
     }
 
     Slice key = input->key();
+    // 截至当前key，累计与level-(n+2)重叠的key的数据的字节数
+    // 超过的指定阈值,则立即dump成sstable
     if (compact->compaction->ShouldStopBefore(key) &&
         compact->builder != NULL) {
       status = FinishCompactionOutputFile(compact, input);
@@ -994,6 +1000,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
     if (!drop) {
       // Open output file if necessary
       if (compact->builder == NULL) {
+        // builder此处被构造
         status = OpenCompactionOutputFile(compact);
         if (!status.ok()) {
           break;
@@ -1006,6 +1013,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
       compact->builder->Add(key, input->value());
 
       // Close output file if it is big enough
+      // 当builder里存储的数据超过指定大小了，就dump成sstable
       if (compact->builder->FileSize() >=
           compact->compaction->MaxOutputFileSize()) {
         status = FinishCompactionOutputFile(compact, input);
@@ -1018,6 +1026,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
     input->Next();
   }
 
+  // @here
   if (status.ok() && shutting_down_.Acquire_Load()) {
     status = Status::IOError("Deleting DB during compaction");
   }
@@ -1045,6 +1054,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   stats_[compact->compaction->level() + 1].Add(stats);
 
   if (status.ok()) {
+    // 构造VersionEdit,提交为新的version中进而提交进versionset中
     status = InstallCompactionResults(compact);
   }
   if (!status.ok()) {

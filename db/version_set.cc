@@ -1297,11 +1297,14 @@ Iterator* VersionSet::MakeInputIterator(Compaction* c) {
       if (c->level() + which == 0) {
         const std::vector<FileMetaData*>& files = c->inputs_[which];
         for (size_t i = 0; i < files.size(); i++) {
+          // MemTableIterator ??
+          // @1Feng: why?
           list[num++] = table_cache_->NewIterator(
               options, files[i]->number, files[i]->file_size);
         }
       } else {
         // Create concatenating iterator for the files from this level
+        // TwoLevelIterator??
         list[num++] = NewTwoLevelIterator(
             new Version::LevelFileNumIterator(icmp_, &c->inputs_[which]),
             &GetFileIterator, table_cache_, options);
@@ -1311,6 +1314,7 @@ Iterator* VersionSet::MakeInputIterator(Compaction* c) {
   assert(num <= space);
   Iterator* result = NewMergingIterator(&icmp_, list, num);
   delete[] list;
+  // 最终返回的是MergingIterator
   return result;
 }
 
@@ -1332,6 +1336,8 @@ Compaction* VersionSet::PickCompaction() {
     for (size_t i = 0; i < current_->files_[level].size(); i++) {
       FileMetaData* f = current_->files_[level][i];
       if (compact_pointer_[level].empty() ||
+          // 这个比较的含义是什么？
+          // @1Feng
           icmp_.Compare(f->largest.Encode(), compact_pointer_[level]) > 0) {
         c->inputs_[0].push_back(f);
         break;
@@ -1511,6 +1517,9 @@ void Compaction::AddInputDeletions(VersionEdit* edit) {
   }
 }
 
+// 对于ValueType是kTypeDeletion的key，
+// 我们查找level-(n+2) ~~ level-end，看看有没有在range上包含该key的
+// sstable，如果有，则意味着不能丢弃这个key
 bool Compaction::IsBaseLevelForKey(const Slice& user_key) {
   // Maybe use binary search to find right entry instead of linear search?
   const Comparator* user_cmp = input_version_->vset_->icmp_.user_comparator();
