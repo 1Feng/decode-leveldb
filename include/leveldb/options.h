@@ -85,7 +85,7 @@ struct Options {
   // the next time the database is opened.
   //
   // Default: 4MB
-  // 这个buffer是啥，memtable?
+  // 这个就是memtable
   size_t write_buffer_size;
 
   // Number of open files that can be used by the DB.  You may need to

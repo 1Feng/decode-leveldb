@@ -945,7 +945,7 @@ Status VersionSet::Recover(bool *save_manifest) {
   if (current.empty() || current[current.size()-1] != '\n') {
     return Status::Corruption("CURRENT file does not end with newline");
   }
-  // @1Feng: why delete the last one ?
+  //  remove '\n'
   current.resize(current.size() - 1);
 
   std::string dscname = dbname_ + "/" + current;
@@ -971,6 +971,7 @@ Status VersionSet::Recover(bool *save_manifest) {
     log::Reader reader(file, &reporter, true/*checksum*/, 0/*initial_offset*/);
     Slice record;
     std::string scratch;
+    // 逐个读取，回放，恢复进builder中
     while (reader.ReadRecord(&record, &scratch) && s.ok()) {
       VersionEdit edit;
       s = edit.DecodeFrom(record);

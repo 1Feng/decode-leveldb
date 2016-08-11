@@ -184,6 +184,7 @@ Status DBImpl::NewDB() {
   new_db.SetNextFile(2);
   new_db.SetLastSequence(0);
 
+  // 当前的manifest number是1，所以上面next file number 是2
   const std::string manifest = DescriptorFileName(dbname_, 1);
   WritableFile* file;
   Status s = env_->NewWritableFile(manifest, &file);
@@ -1553,7 +1554,6 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
 
 DB::~DB() { }
 
-// @here
 Status DB::Open(const Options& options, const std::string& dbname,
                 DB** dbptr) {
   *dbptr = NULL;
@@ -1563,6 +1563,7 @@ Status DB::Open(const Options& options, const std::string& dbname,
   VersionEdit edit;
   // Recover handles create_if_missing, error_if_exists
   bool save_manifest = false;
+  // @here
   Status s = impl->Recover(&edit, &save_manifest);
   if (s.ok() && impl->mem_ == NULL) {
     // Create new log and a corresponding memtable.

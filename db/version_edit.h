@@ -93,7 +93,7 @@ class VersionEdit {
   std::string comparator_;
   uint64_t log_number_;
   uint64_t prev_log_number_;
-  uint64_t next_file_number_;
+  uint64_t next_file_number_;  // 这个next_file_number，是所有类型的file的next number？还是只是manifest
   SequenceNumber last_sequence_;
   bool has_comparator_;
   bool has_log_number_;

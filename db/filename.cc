@@ -131,6 +131,7 @@ Status SetCurrentFile(Env* env, const std::string& dbname,
   assert(contents.starts_with(dbname + "/"));
   contents.remove_prefix(dbname.size() + 1);
   std::string tmp = TempFileName(dbname, descriptor_number);
+  // 写入current文件的仅仅就是个manifest文件名
   Status s = WriteStringToFileSync(env, contents.ToString() + "\n", tmp);
   if (s.ok()) {
     s = env->RenameFile(tmp, CurrentFileName(dbname));
