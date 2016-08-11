@@ -153,6 +153,10 @@ class DBImpl : public DB {
 
   // Set of table files to protect from deletion because they are
   // part of ongoing compactions.
+  // @1Feng:
+  // 既然后台只会有一个compact线程，而且文件删除操作是compact之后触发的
+  // 那么，既然如此，这个有什么用呢？
+  // 难道统一时间会有多个线程在做compact？
   std::set<uint64_t> pending_outputs_;
 
   // Has a background compaction been scheduled or is running?
@@ -161,11 +165,12 @@ class DBImpl : public DB {
   // Information for a manual compaction
   struct ManualCompaction {
     int level;
-    bool done;                  // true代表当前level已经做过compact了???
+    bool done;                  // 手动compact有可能一次搞不完
     const InternalKey* begin;   // NULL means beginning of key range
     const InternalKey* end;     // NULL means end of key range
     InternalKey tmp_storage;    // Used to keep track of compaction progress
   };
+  // 这个manual_compactions是预留的,用来手动compact
   ManualCompaction* manual_compaction_;
 
   VersionSet* versions_;

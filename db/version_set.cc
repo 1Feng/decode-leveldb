@@ -716,7 +716,9 @@ class VersionSet::Builder {
       // same as the compaction of 40KB of data.  We are a little
       // conservative and allow approximately one seek for every 16KB
       // of data before triggering a compaction.
-      // 不太理解
+      // 1次seek相当与compact 40kb的data,
+      // 那么n次seek大概和compact一个sstable相当(n = sstable_size / 40kb)
+      // 保守点，这里搞了个16kb
       f->allowed_seeks = (f->file_size / 16384);    // 2^14 == 16384 == 16kb
       if (f->allowed_seeks < 100) f->allowed_seeks = 100;
 
@@ -908,6 +910,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
 
   // Install the new version
   if (s.ok()) {
+    // 添加到VersionSet里，v成为current
     AppendVersion(v);
     log_number_ = edit->log_number_;
     prev_log_number_ = edit->prev_log_number_;

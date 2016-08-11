@@ -24,9 +24,11 @@ Status BuildTable(const std::string& dbname,
   meta->file_size = 0;
   iter->SeekToFirst();
 
+  // 生成sstable的filename
   std::string fname = TableFileName(dbname, meta->number);
   if (iter->Valid()) {
     WritableFile* file;
+    // 打开文件
     s = env->NewWritableFile(fname, &file);
     if (!s.ok()) {
       return s;

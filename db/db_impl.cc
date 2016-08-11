@@ -226,10 +226,12 @@ void DBImpl::DeleteObsoleteFiles() {
   }
 
   // Make a set of all of the live files
+  // live包括正在compact的文件，以及所有version里还在引用的文件
   std::set<uint64_t> live = pending_outputs_;
   versions_->AddLiveFiles(&live);
 
   std::vector<std::string> filenames;
+  // dbname_文件夹下的所有文件名
   env_->GetChildren(dbname_, &filenames); // Ignoring errors on purpose
   uint64_t number;
   FileType type;
@@ -494,8 +496,12 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
   // 获取当前时间戳，微秒级别
   const uint64_t start_micros = env_->NowMicros();
   FileMetaData meta;
+  // 获取filenumber
   meta.number = versions_->NewFileNumber();
+  // 加入pending_outputs,意味着这是个新的正在compact的文件
+  // 避免被清理掉
   pending_outputs_.insert(meta.number);
+  // skiplist的iterator
   Iterator* iter = mem->NewIterator();
   Log(options_.info_log, "Level-0 table #%llu: started",
       (unsigned long long) meta.number);
@@ -513,6 +519,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
       (unsigned long long) meta.file_size,
       s.ToString().c_str());
   delete iter;
+  // filenumber从pending_outputs中剔除
   pending_outputs_.erase(meta.number);
 
 
@@ -651,6 +658,7 @@ void DBImpl::RecordBackgroundError(const Status& s) {
 
 void DBImpl::MaybeScheduleCompaction() {
   mutex_.AssertHeld();
+  // 确保只有一个后台线程在做compact
   if (bg_compaction_scheduled_) {
     // Already scheduled
   } else if (shutting_down_.Acquire_Load()) {
@@ -702,20 +710,19 @@ void DBImpl::BackgroundCompaction() {
   }
 
   Compaction* c;
+  // 暂时看不到is_manual为true的时候
+  // 当前版本代码里，manual_compactions_没有被赋值过
   bool is_manual = (manual_compaction_ != NULL);
   InternalKey manual_end;
   if (is_manual) {
     ManualCompaction* m = manual_compaction_;
     c = versions_->CompactRange(m->level, m->begin, m->end);
     // manual_compaction_中记录的key range在当前level没有重叠了
-    // 说明已经被compact过了？ @1Feng
+    // 说明munual_compaction_指定的操作已经被完成
     // 此时c == NULL, 标记m->done 为 true
     m->done = (c == NULL);
     if (c != NULL) {
       // 即c->input[0][c->input[0].size() - 1]->largest
-      // c->input里的sstable metadata数据是按照level-n的sstable(即version->files_)
-      // 顺序填充的.所以，input里的数据也是有顺序的，最后一个的largest，就是level-n待
-      // compact的sstable里的largest key
       manual_end = c->input(0, c->num_input_files(0) - 1)->largest;
     }
     Log(options_.info_log,
@@ -783,6 +790,7 @@ void DBImpl::BackgroundCompaction() {
     if (!m->done) {
       // We only compacted part of the requested range.  Update *m
       // to the range that is left to be compacted.
+      // 由于CompactRange的逻辑，manual_end可能会小于m->end
       m->tmp_storage = manual_end;
       m->begin = &m->tmp_storage;
     }
@@ -934,7 +942,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   // 返回的是MergingIterator，自带归并操作的iterator
   Iterator* input = versions_->MakeInputIterator(compact->compaction);
   // 所有待归并的sstable都会seek-to-first,然后挑选出smallest key
-  // next操作也类似，就是在做归并操作
+  // next操作也类似，本质就是在做归并操作
   input->SeekToFirst();
   Status status;
   ParsedInternalKey ikey;
@@ -1040,7 +1048,6 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
     input->Next();
   }
 
-  // @here
   if (status.ok() && shutting_down_.Acquire_Load()) {
     status = Status::IOError("Deleting DB during compaction");
   }
@@ -1179,6 +1186,8 @@ Status DBImpl::Get(const ReadOptions& options,
     mutex_.Lock();
   }
 
+  // 每个sstable都有一个固定的allow-seeks数(1<<30)，
+  // 每次磁盘读取，会减一，如果为0了，说明这个文件需要被compact
   if (have_stat_update && current->UpdateStats(stats)) {
     MaybeScheduleCompaction();
   }
@@ -1544,6 +1553,7 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
 
 DB::~DB() { }
 
+// @here
 Status DB::Open(const Options& options, const std::string& dbname,
                 DB** dbptr) {
   *dbptr = NULL;
