@@ -300,7 +300,7 @@ class VersionSet {
   const Options* const options_;  // const pointer to const OPtions
   TableCache* const table_cache_;
   const InternalKeyComparator icmp_;
-  uint64_t next_file_number_;
+  uint64_t next_file_number_;      // 用来递增的生成new filenumber
   uint64_t manifest_file_number_;
   uint64_t last_sequence_;
   uint64_t log_number_;

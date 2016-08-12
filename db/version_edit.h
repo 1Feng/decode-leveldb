@@ -91,9 +91,11 @@ class VersionEdit {
   typedef std::set< std::pair<int, uint64_t> > DeletedFileSet;
 
   std::string comparator_;
-  uint64_t log_number_;
+  // 下面的几个number，都是用来写入manifest
+  uint64_t log_number_;             // 当前的binlog number
   uint64_t prev_log_number_;
-  uint64_t next_file_number_;  // 这个next_file_number，是所有类型的file的next number？还是只是manifest
+  // leveldb里面，每个file都有一个number，由VersionSet负责全局控制
+  uint64_t next_file_number_;
   SequenceNumber last_sequence_;
   bool has_comparator_;
   bool has_log_number_;

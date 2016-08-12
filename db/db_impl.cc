@@ -335,11 +335,14 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
   for (size_t i = 0; i < filenames.size(); i++) {
     if (ParseFileName(filenames[i], &number, &type)) {
       expected.erase(number);
+      // 只恢复前一个log，或者新生成，未提到version里的log
+      // 恢复prev binlog的意义是什么?
       if (type == kLogFile && ((number >= min_log) || (number == prev_log)))
         logs.push_back(number);
     }
   }
   if (!expected.empty()) {
+    // forlder 下存在不被leveldb索引的文件
     char buf[50];
     snprintf(buf, sizeof(buf), "%d missing files; e.g.",
              static_cast<int>(expected.size()));
@@ -429,6 +432,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
       mem = new MemTable(internal_comparator_);
       mem->Ref();
     }
+    // 写入memtable
     status = WriteBatchInternal::InsertInto(&batch, mem);
     MaybeIgnoreError(&status);
     if (!status.ok()) {
@@ -444,6 +448,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
     if (mem->ApproximateMemoryUsage() > options_.write_buffer_size) {
       compactions++;
       *save_manifest = true;
+      // 直接写到level-0
       status = WriteLevel0Table(mem, edit, NULL);
       mem->Unref();
       mem = NULL;
@@ -1563,9 +1568,11 @@ Status DB::Open(const Options& options, const std::string& dbname,
   VersionEdit edit;
   // Recover handles create_if_missing, error_if_exists
   bool save_manifest = false;
-  // @here
+  // edit里放了从binlog里恢复的数据
   Status s = impl->Recover(&edit, &save_manifest);
-  if (s.ok() && impl->mem_ == NULL) {
+  // mmtable和binlog是相互对应的，如果没有继续重用binlog，
+  // 则必然需要把mmtable中的数据dump到磁盘，然后新建一个新的binlog
+  if (s.ok() && impl->mem_ == NULL) {  // 说明没有reuse binlog file，或者压根没有RecoverLogFile
     // Create new log and a corresponding memtable.
     uint64_t new_log_number = impl->versions_->NewFileNumber();
     WritableFile* lfile;
@@ -1581,6 +1588,12 @@ Status DB::Open(const Options& options, const std::string& dbname,
     }
   }
   if (s.ok() && save_manifest) {
+    // @1Feng:
+    // 如果重用了manifest，但是还存在一个binlog的number大于manifest里的
+    // 的LogNumber, 虽然通过binlog恢复了数据，但是versionedit却不会被apply？？
+    //
+    // 如果reuse binlog file了，edit本就是加载自binlog，且这部分数据尚处于mmtable中
+    // 并没有提交到磁盘，所以没有必要提交到manifest里面
     edit.SetPrevLogNumber(0);  // No older logs needed after recovery.
     edit.SetLogNumber(impl->logfile_number_);
     s = impl->versions_->LogAndApply(&edit, &impl->mutex_);

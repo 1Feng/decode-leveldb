@@ -1034,6 +1034,7 @@ Status VersionSet::Recover(bool *save_manifest) {
     builder.SaveTo(v);
     // Install recovered version
     Finalize(v);
+    // 设置为current_version
     AppendVersion(v);
     manifest_file_number_ = next_file;
     next_file_number_ = next_file + 1;
@@ -1070,6 +1071,9 @@ bool VersionSet::ReuseManifest(const std::string& dscname,
 
   assert(descriptor_file_ == NULL);
   assert(descriptor_log_ == NULL);
+  // 不应该先判断下文件是否存在？
+  // 如果是新建了个文件，那还算reuse？
+  // @1Feng
   Status r = env_->NewAppendableFile(dscname, &descriptor_file_);
   if (!r.ok()) {
     Log(options_->info_log, "Reuse MANIFEST: %s\n", r.ToString().c_str());
