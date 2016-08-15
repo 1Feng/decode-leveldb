@@ -92,9 +92,13 @@ class VersionEdit {
 
   std::string comparator_;
   // 下面的几个number，都是用来写入manifest
-  uint64_t log_number_;             // 当前的binlog number
+
+  // 当前的binlog number
+  uint64_t log_number_;
+  // 旧版本leveldb中使用的，当前已经没有意义
+  // 只在从旧版本leveldb数据库恢复时使用
   uint64_t prev_log_number_;
-  // leveldb里面，每个file都有一个number，由VersionSet负责全局控制
+  // leveldb里面，每个file(manifest, db, binlog)都有一个number，由VersionSet负责全局控制
   uint64_t next_file_number_;
   SequenceNumber last_sequence_;
   bool has_comparator_;

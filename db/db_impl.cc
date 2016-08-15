@@ -100,7 +100,9 @@ Options SanitizeOptions(const std::string& dbname,
   if (result.info_log == NULL) {
     // Open a log file in the same directory as the db
     src.env->CreateDir(dbname);  // In case it does not exist
+    // 把之前的LOG，重命名为LOG.old
     src.env->RenameFile(InfoLogFileName(dbname), OldInfoLogFileName(dbname));
+    // 再新建一个LOG
     Status s = src.env->NewLogger(InfoLogFileName(dbname), &result.info_log);
     if (!s.ok()) {
       // No place suitable for logging
@@ -119,6 +121,7 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
     : env_(raw_options.env),
       internal_comparator_(raw_options.comparator),
       internal_filter_policy_(raw_options.filter_policy),
+      // LOG文件由此处创建
       options_(SanitizeOptions(dbname, &internal_comparator_,
                                &internal_filter_policy_, raw_options)),
       owns_info_log_(options_.info_log != raw_options.info_log),
@@ -192,6 +195,8 @@ Status DBImpl::NewDB() {
     return s;
   }
   {
+    // 这里的versionEdit并没有apply到VersionSet里去，而是直接写到manifest文件中
+    // 而且这个manifest文件并没有被VersionSet的descriptor_log_收录
     log::Writer log(file);
     std::string record;
     new_db.EncodeTo(&record);
@@ -290,6 +295,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
     return s;
   }
 
+  // 只有存在current文件，才认为是DB是已经存在的
   if (!env_->FileExists(CurrentFileName(dbname_))) {
     if (options_.create_if_missing) {
       s = NewDB();
@@ -307,6 +313,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
     }
   }
 
+  // 从mainifest中回放，生成出version
   s = versions_->Recover(save_manifest);
   if (!s.ok()) {
     return s;
@@ -317,6 +324,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
   // descriptor (new log files may have been added by the previous
   // incarnation without registering them in the descriptor).
   //
+  // prev_log_number已经不再使用了，这里是为了兼容老版本的leveldb才使用的
   // Note that PrevLogNumber() is no longer used, but we pay
   // attention to it in case we are recovering a database
   // produced by an older version of leveldb.
@@ -335,8 +343,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
   for (size_t i = 0; i < filenames.size(); i++) {
     if (ParseFileName(filenames[i], &number, &type)) {
       expected.erase(number);
-      // 只恢复前一个log，或者新生成，未提到version里的log
-      // 恢复prev binlog的意义是什么?
+      // 恢复前一个binlog(旧版本)，当前,或者新生成未提交到manifest里的binlog
       if (type == kLogFile && ((number >= min_log) || (number == prev_log)))
         logs.push_back(number);
     }
@@ -445,6 +452,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
       *max_sequence = last_seq;
     }
 
+    // 如果需要dump到sstable里，则也需要save_manifest
     if (mem->ApproximateMemoryUsage() > options_.write_buffer_size) {
       compactions++;
       *save_manifest = true;
@@ -1567,12 +1575,19 @@ Status DB::Open(const Options& options, const std::string& dbname,
   impl->mutex_.Lock();
   VersionEdit edit;
   // Recover handles create_if_missing, error_if_exists
+  // options.reuse_logs如果为false，则manifest文件和binlog文件都不会被重用，则：
+  // 1. reover出来的version需要保存到新的manifest文件中，所以save_manifest == true
+  // 2. 一旦从binlog里恢复出数据来，而又不重用binlog，则需要将内存里的数据dump到sstable，形成versionedit
+  //    versionEdit需要写入manifest文件，所以这里的save_manifest == true
+  // 此外，如果optios.reuse_logs == true, 但是从binlog里恢复出来的数据已经超过了write_buffer的大小，则需
+  // 要将内存里的数据dump成sstable，因此出现VersionEdit，所以save_manifest 也会被置为true
   bool save_manifest = false;
   // edit里放了从binlog里恢复的数据
   Status s = impl->Recover(&edit, &save_manifest);
   // mmtable和binlog是相互对应的，如果没有继续重用binlog，
   // 则必然需要把mmtable中的数据dump到磁盘，然后新建一个新的binlog
-  if (s.ok() && impl->mem_ == NULL) {  // 说明没有reuse binlog file，或者压根没有RecoverLogFile
+  // mem == NULL 说明没有重用binlog file
+  if (s.ok() && impl->mem_ == NULL) {
     // Create new log and a corresponding memtable.
     uint64_t new_log_number = impl->versions_->NewFileNumber();
     WritableFile* lfile;
@@ -1588,17 +1603,12 @@ Status DB::Open(const Options& options, const std::string& dbname,
     }
   }
   if (s.ok() && save_manifest) {
-    // @1Feng:
-    // 如果重用了manifest，但是还存在一个binlog的number大于manifest里的
-    // 的LogNumber, 虽然通过binlog恢复了数据，但是versionedit却不会被apply？？
-    //
-    // 如果reuse binlog file了，edit本就是加载自binlog，且这部分数据尚处于mmtable中
-    // 并没有提交到磁盘，所以没有必要提交到manifest里面
     edit.SetPrevLogNumber(0);  // No older logs needed after recovery.
     edit.SetLogNumber(impl->logfile_number_);
     s = impl->versions_->LogAndApply(&edit, &impl->mutex_);
   }
   if (s.ok()) {
+    // 删掉旧的无用的binlog和manifest文件
     impl->DeleteObsoleteFiles();
     impl->MaybeScheduleCompaction();
   }

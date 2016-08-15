@@ -664,8 +664,11 @@ class VersionSet::Builder {
         to_unref.push_back(*it);
       }
       delete added;
-      // 为什么不直接在上面的循环中进行refs
-      // @1Feng
+      // 为什么不直接在上面的循环中进行refs-- && delete?
+      // 答：
+      // added_file 是个set，不能直接把里面的元素内存释放掉
+      // 需要先在set中删除，然后在uefs--，然后delete
+      // 复杂度反而不如当前这种操作方式
       for (uint32_t i = 0; i < to_unref.size(); i++) {
         FileMetaData* f = to_unref[i];
         f->refs--;
@@ -1071,9 +1074,11 @@ bool VersionSet::ReuseManifest(const std::string& dscname,
 
   assert(descriptor_file_ == NULL);
   assert(descriptor_log_ == NULL);
-  // 不应该先判断下文件是否存在？
-  // 如果是新建了个文件，那还算reuse？
-  // @1Feng
+  // 这里的NewAppendableFile调用，默认如果文件不存在时会创建一个，如果真是此时创建的
+  // 肯定不能称之为reuse.
+  // 但是，DB默认如果有current文件，才认为DB已经存在,有current就必然有manifest文件
+  // 如果是新建一个DB，首先做的也是新建一个manifest，然后写入current，参考NewDB()
+  // 综上，非外力情况下，一个合法的DB肯定会有manifest文件
   Status r = env_->NewAppendableFile(dscname, &descriptor_file_);
   if (!r.ok()) {
     Log(options_->info_log, "Reuse MANIFEST: %s\n", r.ToString().c_str());
