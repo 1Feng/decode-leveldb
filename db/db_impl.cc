@@ -1412,7 +1412,8 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       // case it is sharing the same core as the writer.
       // 所谓hard limit 应该是指StopWritesTrigger
       // 为了避免等到了hard limit直接等待数秒钟，所以在此处提前延迟一毫秒
-      // 从而避免和compation thread抢cpu资源
+      // 以防万一和compation thread抢cpu资源
+      // 同时也避免了IO压力
       mutex_.Unlock();
       env_->SleepForMicroseconds(1000);
       allow_delay = false;  // Do not delay a single write more than once
