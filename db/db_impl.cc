@@ -1390,7 +1390,7 @@ WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
 // 注意事项：
 //   force参数用来强制执行
 //   该函数有可能会等待
-//   force == false的时候才会等待, force == false时候是不会写东西的，等待没有意义
+//   force == false的时候才会等待, force == true时候是不会写东西的，等待没有意义
 Status DBImpl::MakeRoomForWrite(bool force) {
   mutex_.AssertHeld();
   assert(!writers_.empty());
