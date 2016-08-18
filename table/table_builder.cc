@@ -94,6 +94,7 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
   assert(!r->closed);
   if (!ok()) return;
   if (r->num_entries > 0) {
+    // leveldb.InternalKeyComparator
     assert(r->options.comparator->Compare(key, Slice(r->last_key)) > 0);
   }
 
@@ -101,6 +102,7 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
     assert(r->data_block.empty());
     // 查找相同前缀，如果存在，last_key里只保存该前缀，
     // 否则里面内容不变，前缀用于前缀压缩
+    // @here
     r->options.comparator->FindShortestSeparator(&r->last_key, key);
     std::string handle_encoding;
     // 构造空的block handle， offset ＝ 0， size ＝ 0

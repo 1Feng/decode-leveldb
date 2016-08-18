@@ -74,6 +74,8 @@ void InternalKeyComparator::FindShortestSeparator(
   std::string tmp(user_start.data(), user_start.size());
   user_comparator_->FindShortestSeparator(&tmp, user_limit);
   if (tmp.size() < user_start.size() &&
+      // tmp[tmp.size() - 1]在FindShortestSeprator里做了+1操作
+      // 所以字节序上，tmp大于user_start了
       user_comparator_->Compare(user_start, tmp) < 0) {
     // User key has become shorter physically, but larger logically.
     // Tack on the earliest possible number to the shortened user key.

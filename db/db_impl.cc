@@ -708,8 +708,9 @@ void DBImpl::BackgroundCall() {
 
   // Previous compaction may have produced too many files in a level,
   // so reschedule another compaction if needed.
-  // @1Feng:
   // 这么无休止的调用下去，是否会一直有个后台线程层层递归的去进行compact？
+  // 肯定不会，期待的应该是(imm_ == NULL && manual_compaction_ == NULL && !versions_->NeedsCompaction())
+  // 否则下面的signalall就难以触发了, write就会一直阻塞
   MaybeScheduleCompaction();
   bg_cv_.SignalAll();
 }
