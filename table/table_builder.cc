@@ -105,7 +105,7 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
     // @here
     r->options.comparator->FindShortestSeparator(&r->last_key, key);
     std::string handle_encoding;
-    // 构造空的block handle， offset ＝ 0， size ＝ 0
+    // 每写满一个data block，即在写下一个data block时，写一个index block
     r->pending_handle.EncodeTo(&handle_encoding);
     // 构造 index block, 这里放last_key是前缀
     r->index_block.Add(r->last_key, Slice(handle_encoding));
@@ -121,6 +121,7 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
   r->data_block.Add(key, value);
 
   const size_t estimated_block_size = r->data_block.CurrentSizeEstimate();
+  // 凑足量block然后再写入
   if (estimated_block_size >= r->options.block_size) {
     Flush();
   }

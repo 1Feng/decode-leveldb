@@ -74,6 +74,8 @@ void BlockBuilder::Add(const Slice& key, const Slice& value) {
   Slice last_key_piece(last_key_);
   assert(!finished_);
   assert(counter_ <= options_->block_restart_interval);
+  // 如果buffer_不为空了，那么当前的key就需要被之前的key大，这一点需要caller来保证
+  // 即，从小到大的往Block里写
   assert(buffer_.empty() // No values yet?
          || options_->comparator->Compare(key, last_key_piece) > 0);
   size_t shared = 0;

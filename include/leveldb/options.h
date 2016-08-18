@@ -116,7 +116,7 @@ struct Options {
   // leave this parameter alone.
   //
   // Default: 16
-  // 干啥用的？
+  // sstable 存储中key的前缀压缩的最大个数不应超过这个数字
   int block_restart_interval;
 
   // Compress blocks using the specified compression algorithm.  This
