@@ -101,8 +101,9 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
   if (r->pending_index_entry) {
     assert(r->data_block.empty());
     // 查找相同前缀，如果存在，last_key里只保存该前缀，
-    // 否则里面内容不变，前缀用于前缀压缩
-    // @here
+    // 否则里面内容不变，这个所谓前缀只是用来存放在index block里
+    // max_key_in_last_block <= last_key < min_key_in_next_block
+    // 即所谓前一个block的最大key
     r->options.comparator->FindShortestSeparator(&r->last_key, key);
     std::string handle_encoding;
     // 每写满一个data block，即在写下一个data block时，写一个index block
@@ -121,7 +122,7 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
   r->data_block.Add(key, value);
 
   const size_t estimated_block_size = r->data_block.CurrentSizeEstimate();
-  // 凑足量block然后再写入
+  // 凑够足量block然后再写入
   if (estimated_block_size >= r->options.block_size) {
     Flush();
   }
