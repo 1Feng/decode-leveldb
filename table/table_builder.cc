@@ -21,7 +21,7 @@ struct TableBuilder::Rep {
   Options options;
   Options index_block_options;
   WritableFile* file;
-  uint64_t offset;
+  uint64_t offset;      // 当前文件的offset
   Status status;
   BlockBuilder data_block;
   BlockBuilder index_block;

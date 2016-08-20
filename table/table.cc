@@ -242,9 +242,9 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k,
   // 在index block里查找k的位置
   iiter->Seek(k);
   if (iiter->Valid()) {
-    Slice handle_value = iiter->value(); // 这里这个value是啥？
+    Slice handle_value = iiter->value();
     // @1Feng: bloom filter是block级别的？原来不是全局的？
-    // 除非用户指定，而且这里的filter 默认是NULL啊
+    // 除非用户指定，filter 默认是NULL
     FilterBlockReader* filter = rep_->filter;
     BlockHandle handle;
     if (filter != NULL &&

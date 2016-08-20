@@ -18,8 +18,20 @@ static const size_t kFilterBase = 1 << kFilterBaseLg;
 FilterBlockBuilder::FilterBlockBuilder(const FilterPolicy* policy)
     : policy_(policy) {
 }
-
 void FilterBlockBuilder::StartBlock(uint64_t block_offset) {
+  // 一个block 非特殊情况下大于等于4kb
+  // 不超过6kb时会成对生成数据，如果超过6kb不超过8kb，则会生成3个offset数据，依此类推
+  // 例如第一个block就超过6kb时，会写入offset1 offset2 offset2
+  // --------------------------------------------------------------
+  // | 0 | 0 | offset 1 | offset 2 | offset 2 | offset 2 | offset 3 | ....
+  // --------------------------------------------------------------
+  // 其中offset2 － offset1 即第一个block的filter数据
+  // 特殊情况下，例如sstable里的最后一个data block 大小不足4kb
+  // 参见Finish(),通过GenerateFilter()写了start，然后end置为array_offset
+  //
+  // 以此保证的索引规则如下：
+  // filter_offsets[block_offset/KFilterBase] 就是filter的start
+  // filter_offsets[block_offset/KFilterBase + 1] 就是filter的end
   uint64_t filter_index = (block_offset / kFilterBase);
   assert(filter_index >= filter_offsets_.size());
   while (filter_index > filter_offsets_.size()) {
@@ -93,6 +105,8 @@ FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
 }
 
 bool FilterBlockReader::KeyMayMatch(uint64_t block_offset, const Slice& key) {
+  // 这里是用右移动11位，上面StartBlock是除以2^11
+  // 其实效果是一样的
   uint64_t index = block_offset >> base_lg_;
   if (index < num_) {
     uint32_t start = DecodeFixed32(offset_ + index*4);
