@@ -22,9 +22,9 @@ void FilterBlockBuilder::StartBlock(uint64_t block_offset) {
   // 一个block 非特殊情况下大于等于4kb
   // 不超过6kb时会成对生成数据，如果超过6kb不超过8kb，则会生成3个offset数据，依此类推
   // 例如第一个block就超过6kb时，会写入offset1 offset2 offset2
-  // --------------------------------------------------------------
-  // | 0 | 0 | offset 1 | offset 2 | offset 2 | offset 2 | offset 3 | ....
-  // --------------------------------------------------------------
+  // ------------------------------------------------------------------------
+  // | 0 | offset 1 | offset 1 | offset 2 | offset 2 | offset 2 | offset 3 | ....
+  // ------------------------------------------------------------------------
   // 其中offset2 － offset1 即第一个block的filter数据
   // 特殊情况下，例如sstable里的最后一个data block 大小不足4kb
   // 参见Finish(),通过GenerateFilter()写了start，然后end置为array_offset
