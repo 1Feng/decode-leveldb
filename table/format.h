@@ -59,9 +59,9 @@ class BlockHandle {
 //   --------------------                      |
 //   |    meta block    |                   sstable
 //   --------------------                      |
-//   |  metablock index |                      |
+//   | meta index block |                      |
 //   --------------------                      |
-//   |  index block     |                      |
+//   | data index block |                      |
 //   --------------------------------          |
 //   | metaindex_handle |      |               |
 //   --------------------      |               |
