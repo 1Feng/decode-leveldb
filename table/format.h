@@ -44,7 +44,7 @@ class BlockHandle {
   uint64_t size_;
 };
 
-// 文件的Footer(页脚)，标识了两个重要的存放索引的block的位置（index block 和 metablock index）
+// 文件的Footer(页脚)，标识了两个重要的存放索引的block的位置（data index block 和 meta index block）
 // 一个完整的文件结构如下：
 //   -----------------------------------------------
 //   |    data block    |                      |

@@ -1578,7 +1578,8 @@ Status DB::Open(const Options& options, const std::string& dbname,
   VersionEdit edit;
   // Recover handles create_if_missing, error_if_exists
   // options.reuse_logs如果为false，则manifest文件和binlog文件都不会被重用，则：
-  // 1. reover出来的version需要保存到新的manifest文件中，所以save_manifest == true
+  // 1. 如果options.reuse_logs == false, 即不重用manifest文件和binlog文件
+  //    则reover出来的version需要保存到新的manifest文件中，所以save_manifest == true
   // 2. 一旦从binlog里恢复出数据来，而又不重用binlog，则需要将内存里的数据dump到sstable，形成versionedit
   //    versionEdit需要写入manifest文件，所以这里的save_manifest == true
   // 此外，如果optios.reuse_logs == true, 但是从binlog里恢复出来的数据已经超过了write_buffer的大小，则需
