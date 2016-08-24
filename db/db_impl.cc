@@ -1009,7 +1009,9 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
         last_sequence_for_key = kMaxSequenceNumber;
       }
 
-      // 小于等于smallest，不照样会把snapshot里的删除掉么
+      // 前一个key和当前key的user key相等，并且前一个key的sequence number小于等于 smallest_snapshot
+      // 当前key的sequence number一定是小于前一个key的sequence number的，所以我们选择丢弃它
+      // 这样，我们其实只是丢弃了两条key相同的记录(sequence number 都小于smallest snapshot)中，sequence number更小的一个
       if (last_sequence_for_key <= compact->smallest_snapshot) {
         // Hidden by an newer entry for same user key
         // 丢弃重复的写入(非删除)
