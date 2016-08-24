@@ -1549,7 +1549,7 @@ void Compaction::AddInputDeletions(VersionEdit* edit) {
 
 // 对于ValueType是kTypeDeletion的key，
 // 我们查找level-(n+2) ~~ level-end，看看有没有在range上包含该key的
-// sstable，如果有，则意味着不能丢弃这个key
+// sstable，如果有，则意味着不能丢弃这个key，返回false
 bool Compaction::IsBaseLevelForKey(const Slice& user_key) {
   // Maybe use binary search to find right entry instead of linear search?
   const Comparator* user_cmp = input_version_->vset_->icmp_.user_comparator();

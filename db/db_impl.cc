@@ -997,6 +997,9 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
       has_current_user_key = false;
       last_sequence_for_key = kMaxSequenceNumber;
     } else {
+      // 只要当前key与前一条user key不相等，则last_sequence_for_key都是kMaxSequenceNumber
+      // 如果当前key与前一条user key相等，则说明当前key需要被丢弃
+      // 因为internal key的比较规则是，当user key相等的时候，sequence number大的反而小
       if (!has_current_user_key ||
           user_comparator()->Compare(ikey.user_key,
                                      Slice(current_user_key)) != 0) {
@@ -1006,12 +1009,15 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
         last_sequence_for_key = kMaxSequenceNumber;
       }
 
+      // 小于等于smallest，不照样会把snapshot里的删除掉么
       if (last_sequence_for_key <= compact->smallest_snapshot) {
         // Hidden by an newer entry for same user key
+        // 丢弃重复的写入(非删除)
         drop = true;    // (A)
       } else if (ikey.type == kTypeDeletion &&
                  ikey.sequence <= compact->smallest_snapshot &&
                  compact->compaction->IsBaseLevelForKey(ikey.user_key)) {
+        // 丢弃删除操作
         // For this user key:
         // (1) there is no data in higher levels
         // (2) data in lower levels will have larger sequence numbers
