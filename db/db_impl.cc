@@ -1000,6 +1000,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
       // 只要当前key与前一条user key不相等，则last_sequence_for_key都是kMaxSequenceNumber
       // 如果当前key与前一条user key相等，则说明当前key需要被丢弃
       // 因为internal key的比较规则是，当user key相等的时候，sequence number大的反而小
+      // 本质上key的排序规则是从小到大，从新到旧
       if (!has_current_user_key ||
           user_comparator()->Compare(ikey.user_key,
                                      Slice(current_user_key)) != 0) {
@@ -1283,8 +1284,12 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
   if (status.ok() && my_batch != NULL) {  // NULL batch is for compactions
     // 每条写操作都会尝试把队列里其他的写操作组织成批量操作
     WriteBatch* updates = BuildBatchGroup(&last_writer);
+    // 批量操作的几条记录拥有相同的sequence number
+    // 如果这批操作里有两条key相同的记录呢？
+    // 由于后插入的记录在WriteBatch中也是位于后面的
+    // 同时，插入skiplist时，使用的是小于号比较，后插入的只要不小于前者
+    // 就会被插入到后面
     WriteBatchInternal::SetSequence(updates, last_sequence + 1);
-    // sequence number 会因为批量写变得不连续
     last_sequence += WriteBatchInternal::Count(updates);
 
     // Add to log and apply to memtable.  We can release the lock

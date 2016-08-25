@@ -62,8 +62,6 @@ Status WriteBatch::Iterate(Handler* handler) const {
     switch (tag) {
       case kTypeValue:
         // 取出key， value的raw data
-        // @1Feng: 既然这里又要取出来，那何必当初呢？除非是对写入log来说是友好的
-        // 确实是对于log来说是友好的
         if (GetLengthPrefixedSlice(&input, &key) &&
             GetLengthPrefixedSlice(&input, &value)) {
           handler->Put(key, value);
