@@ -38,6 +38,8 @@ char* Arena::AllocateFallback(size_t bytes) {
   return result;
 }
 
+// @1Feng
+// 没看懂这个对齐规则是什么？
 char* Arena::AllocateAligned(size_t bytes) {
   const int align = (sizeof(void*) > 8) ? sizeof(void*) : 8;
   assert((align & (align-1)) == 0);   // Pointer size should be a power of 2
