@@ -20,7 +20,7 @@
 
 namespace leveldb {
 
-static const int kTargetFileSize = 2 * 1048576;
+static const int kTargetFileSize = 2 * 1048576;  // 2 * 2 ^ 20 = 2 * 1 Mb
 
 // Maximum bytes of overlaps in grandparent (i.e., level+2) before we
 // stop building a single file in a level->level+1 compaction.
@@ -368,8 +368,6 @@ Status Version::Get(const ReadOptions& options,
       num_files = tmp.size();
     } else {
       // Binary search to find earliest index whose largest key >= ikey.
-      // 为什么这里要用internal-key???
-      // @1Feng
       uint32_t index = FindFile(vset_->icmp_, files_[level], ikey);
       if (index >= num_files) {
         files = NULL;
@@ -700,6 +698,7 @@ class VersionSet::Builder {
       levels_[level].deleted_files.insert(number);
     }
 
+    // @here
     // Add new files
     for (size_t i = 0; i < edit->new_files_.size(); i++) {
       const int level = edit->new_files_[i].first;
@@ -1310,8 +1309,7 @@ Iterator* VersionSet::MakeInputIterator(Compaction* c) {
       if (c->level() + which == 0) {
         const std::vector<FileMetaData*>& files = c->inputs_[which];
         for (size_t i = 0; i < files.size(); i++) {
-          // MemTableIterator ??
-          // @1Feng: why?
+          // MemTableIterator
           list[num++] = table_cache_->NewIterator(
               options, files[i]->number, files[i]->file_size);
         }
@@ -1408,7 +1406,7 @@ void VersionSet::SetupOtherInputs(Compaction* c) {
   // 扩展待compact的key range
   // 举例：
   // level-n 的key范围是b~f, 待compact的key范围是d~e,
-  // level-(n + 1)待compact的key范围是b~f, 因此我们可以扩展下level下的key范围
+  // level-(n + 1)待compact的key范围是b~e, 因此我们可以扩展下level-n下的key范围
   // level-n待compact的范围提升至b~e,同时保证使用这个范围进行compact时
   // levle-(n + 1)下的key范围不会再发生扩大
   //
