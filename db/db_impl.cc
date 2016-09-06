@@ -1210,7 +1210,7 @@ Status DBImpl::Get(const ReadOptions& options,
     mutex_.Lock();
   }
 
-  // 每个sstable都有一个固定的allow-seeks数(1<<30)，
+  // 每个sstable都有一个固定的allow-seeks数
   // 每次磁盘读取，会减一，如果为0了，说明这个文件需要被compact
   if (have_stat_update && current->UpdateStats(stats)) {
     MaybeScheduleCompaction();
