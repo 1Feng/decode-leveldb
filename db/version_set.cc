@@ -111,7 +111,7 @@ static bool BeforeFile(const Comparator* ucmp,
 
 bool SomeFileOverlapsRange(
     const InternalKeyComparator& icmp,
-    bool disjoint_sorted_files,  // 不相交的，排序的文件; @1Feng 啥意思？
+    bool disjoint_sorted_files,  // 不相交的，排序的文件; level > 0 时为true
     const std::vector<FileMetaData*>& files,
     const Slice* smallest_user_key,
     const Slice* largest_user_key) {

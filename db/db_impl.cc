@@ -110,8 +110,7 @@ Options SanitizeOptions(const std::string& dbname,
     }
   }
   if (result.block_cache == NULL) {
-    // 2^23？？为啥？
-    // @1Feng
+    // 默认8M
     result.block_cache = NewLRUCache(8 << 20);
   }
   return result;
@@ -796,10 +795,11 @@ void DBImpl::BackgroundCompaction() {
   }
 
   if (is_manual) {
+    // 预留的逻辑，目测是后续用来支持手动compact的
     ManualCompaction* m = manual_compaction_;
     if (!status.ok()) {
       // compact失败错误的情况下，done被置为true
-      // why??? @1Feng
+      // 意味着如果是手动触发的compact，执行失败就放弃
       m->done = true;
     }
     if (!m->done) {
@@ -809,8 +809,6 @@ void DBImpl::BackgroundCompaction() {
       m->tmp_storage = manual_end;
       m->begin = &m->tmp_storage;
     }
-    // 直接赋值为NULL??
-    // @1Feng
     manual_compaction_ = NULL;
   }
 }

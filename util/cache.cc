@@ -385,8 +385,6 @@ static const int kNumShards = 1 << kNumShardBits;
 
 class ShardedLRUCache : public Cache {
  private:
-  // 分了好多组LRUCache, why?
-  // @1Feng
   LRUCache shard_[kNumShards];
   port::Mutex id_mutex_;
   uint64_t last_id_;
@@ -396,15 +394,14 @@ class ShardedLRUCache : public Cache {
   }
 
   static uint32_t Shard(uint32_t hash) {
-    // 去掉高28bit
+    // 去掉低28bit
     return hash >> (32 - kNumShardBits);
   }
 
  public:
   explicit ShardedLRUCache(size_t capacity)
       : last_id_(0) {
-    // 默认是 (capacity ＋ 15)/16
-    // 一个字节是8个bits，所以这里除以16是什么意思?
+    // 总共分为16个shard
     const size_t per_shard = (capacity + (kNumShards - 1)) / kNumShards;
     for (int s = 0; s < kNumShards; s++) {
       shard_[s].SetCapacity(per_shard);
