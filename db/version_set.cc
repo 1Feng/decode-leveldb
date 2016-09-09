@@ -344,6 +344,8 @@ Status Version::Get(const ReadOptions& options,
     if (num_files == 0) continue;
 
     // Get the list of files to search in this level
+    // a FileMetaData pointer to a const pointer to an FileMetaData
+    // 不明白为啥这么麻烦，上边明明就有直接使用files_[level][index]的案例
     FileMetaData* const* files = &files_[level][0];
     if (level == 0) {
       // Level-0 files may overlap each other.  Find all files that
