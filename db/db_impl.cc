@@ -575,6 +575,10 @@ void DBImpl::CompactMemTable() {
 
   // Replace immutable memtable with the generated Table
   if (s.ok()) {
+    // 如果在执行这里之前机器crash了，edit没有写入mainifest
+    // 新生成的sstable并未纳入管理
+    // 重启之后会继续从日志中回复数据到memtable中
+    // 所以，即不会丢失数据，也不会重复
     edit.SetPrevLogNumber(0);
     edit.SetLogNumber(logfile_number_);  // Earlier logs no longer needed
     s = versions_->LogAndApply(&edit, &mutex_);
